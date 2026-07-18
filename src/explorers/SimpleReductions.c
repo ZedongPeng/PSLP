@@ -670,7 +670,7 @@ void clean_small_coeff_A(Matrix *A, const Bound *bounds, const RowTag *row_tags,
     }
 }
 
-PresolveStatus remove_variables_with_close_bounds(Problem *prob)
+PresolveStatus remove_variables_with_equal_bounds(Problem *prob)
 {
     Constraints *constraints = prob->constraints;
     const double *c = prob->obj->c;
@@ -689,14 +689,13 @@ PresolveStatus remove_variables_with_close_bounds(Problem *prob)
 
         assert(!HAS_TAG(col_tags[ii], C_TAG_INACTIVE));
 
-        if (IS_EQUAL_FEAS_TOL(bounds[ii].lb, bounds[ii].ub))
-        {
-            // no need to check return value since bounds are equal
-            fix_col(constraints, (int) ii, bounds[ii].lb, c[ii]);
-        }
-        else if (bounds[ii].lb > bounds[ii].ub + FEAS_TOL)
+        if (bounds[ii].lb > bounds[ii].ub)
         {
             return INFEASIBLE;
+        }
+        else if (bounds[ii].lb == bounds[ii].ub)
+        {
+            fix_col(constraints, (int) ii, bounds[ii].lb, c[ii]);
         }
     }
 

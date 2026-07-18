@@ -118,10 +118,13 @@ static char *test_2_domain()
     int n_rows = 4;
     int n_cols = 5;
 
-    double lhs[] = {4, -2 / (13 * 3) - 1 / (17 * 7) + 7 / (3 * 9) - 1e-10, -INF, 6};
+    double lhs[] = {4,
+                    -2.0 / (13 * 3) - 1.0 / (17 * 7) + 7.0 / (3 * 9) -
+                        1e-10,
+                    -INF, 6};
     double rhs[] = {INF, INF, 5, INF};
-    double lbs[5] = {1 / 3, 1 / 7, -INF, 0, 0};
-    double ubs[] = {INF, INF, 1 / 9, INF, INF};
+    double lbs[5] = {1.0 / 3, 1.0 / 7, -INF, 0, 0};
+    double ubs[] = {INF, INF, 1.0 / 9, INF, INF};
     double c[] = {-1, -1, -1, 3, 2};
 
     Settings *stgs = default_settings();
@@ -130,33 +133,23 @@ static char *test_2_domain()
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
-    Matrix *A = constraints->A;
     PresolveStatus status = propagate_primal(prob, true);
     mu_assert("error status", status != INFEASIBLE);
-    problem_clean(prob, true);
 
-    // check that new A is correct
-    double Ax_correct[] = {1, 3, 3, -1, -2, 2};
-    int Ai_correct[] = {0, 1, 0, 1, 0, 1};
-    int Ap_correct[] = {0, 2, 4, 6};
-    mu_assert("error Ax", ARRAYS_EQUAL_DOUBLE(Ax_correct, A->x, 6));
-    mu_assert("error Ai", ARRAYS_EQUAL_INT(Ai_correct, A->i, 6));
-    mu_assert("rows", check_row_starts(A, Ap_correct));
-
-    // check that new variable bounds are correct
-    double lbs_correct[] = {0, 0};
-    double ubs_correct[] = {INF, INF};
-    mu_assert("error bounds",
-              check_bounds(constraints->bounds, lbs_correct, ubs_correct, 2));
-
-    // check that objective offset is correct
-    mu_assert("error offset", prob->obj->offset == -1 / 3 - 1 / 7 - 1 / 9);
-
-    // check that lhs and rhs are correct
-    double lhs_correct[] = {4 - 1 / 9 - 1 / 3, -INF, 6 - 2 / 3};
-    double rhs_correct[] = {INF, 5 - 1 / 3 - 4 / 7, INF};
-    mu_assert("error lhs", ARRAYS_EQUAL_DOUBLE(lhs_correct, constraints->lhs, 3));
-    mu_assert("error rhs", ARRAYS_EQUAL_DOUBLE(rhs_correct, constraints->rhs, 3));
+    // Nonzero slack must not fix variables.
+    mu_assert("x1 was approximately fixed",
+              !HAS_TAG(constraints->col_tags[0], C_TAG_INACTIVE) &&
+                  constraints->bounds[0].lb == 1.0 / 3 &&
+                  constraints->bounds[0].ub > 1.0 / 3);
+    mu_assert("x2 was approximately fixed",
+              !HAS_TAG(constraints->col_tags[1], C_TAG_INACTIVE) &&
+                  constraints->bounds[1].lb == 1.0 / 7 &&
+                  constraints->bounds[1].ub > 1.0 / 7);
+    mu_assert("x3 was approximately fixed",
+              !HAS_TAG(constraints->col_tags[2], C_TAG_INACTIVE) &&
+                  constraints->bounds[2].lb < 1.0 / 9 &&
+                  constraints->bounds[2].ub == 1.0 / 9);
+    mu_assert("error offset", prob->obj->offset == 0);
 
     PS_FREE(stgs);
     DEBUG(run_debugger(constraints, false));
@@ -252,9 +245,12 @@ static char *test_4_domain()
     int n_cols = 5;
 
     double lhs[] = {4, -INF, -INF, 6};
-    double rhs[] = {INF, -2 / (13 * 3) - 1 / (17 * 7) + 7 / (3 * 9) + 1e-10, 5, INF};
-    double lbs[5] = {-INF, -INF, 1 / 9, 0, 0};
-    double ubs[] = {1 / 3, 1 / 7, INF, INF, INF};
+    double rhs[] = {INF,
+                    -2.0 / (13 * 3) - 1.0 / (17 * 7) + 7.0 / (3 * 9) +
+                        1e-10,
+                    5, INF};
+    double lbs[5] = {-INF, -INF, 1.0 / 9, 0, 0};
+    double ubs[] = {1.0 / 3, 1.0 / 7, INF, INF, INF};
     double c[] = {1, -1, -1, 3, 2};
 
     Settings *stgs = default_settings();
@@ -263,33 +259,23 @@ static char *test_4_domain()
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
-    Matrix *A = constraints->A;
     PresolveStatus status = propagate_primal(prob, true);
     mu_assert("error status", status != INFEASIBLE);
-    problem_clean(prob, true);
 
-    // check that new A is correct
-    double Ax_correct[] = {1, 3, 3, -1, -2, 2};
-    int Ai_correct[] = {0, 1, 0, 1, 0, 1};
-    int Ap_correct[] = {0, 2, 4, 6};
-    mu_assert("error Ax", ARRAYS_EQUAL_DOUBLE(Ax_correct, A->x, 6));
-    mu_assert("error Ai", ARRAYS_EQUAL_INT(Ai_correct, A->i, 6));
-    mu_assert("rows", check_row_starts(A, Ap_correct));
-
-    // check that new variable bounds are correct
-    double lbs_correct[] = {0, 0};
-    double ubs_correct[] = {INF, INF};
-    mu_assert("error bounds",
-              check_bounds(constraints->bounds, lbs_correct, ubs_correct, 2));
-
-    // check that objective offset is correct
-    mu_assert("error offset", prob->obj->offset == 1 / 3 + 1 / 7 - 1 / 9);
-
-    // check that lhs and rhs are correct
-    double lhs_correct[] = {4 - 1 / 9 - 1 / 3, -INF, 6 - 2 / 3};
-    double rhs_correct[] = {INF, 5 - 1 / 3 - 4 / 7, INF};
-    mu_assert("error lhs", ARRAYS_EQUAL_DOUBLE(lhs_correct, constraints->lhs, 3));
-    mu_assert("error rhs", ARRAYS_EQUAL_DOUBLE(rhs_correct, constraints->rhs, 3));
+    // Symmetric nonzero-slack case.
+    mu_assert("x1 was approximately fixed",
+              !HAS_TAG(constraints->col_tags[0], C_TAG_INACTIVE) &&
+                  constraints->bounds[0].lb < 1.0 / 3 &&
+                  constraints->bounds[0].ub == 1.0 / 3);
+    mu_assert("x2 was approximately fixed",
+              !HAS_TAG(constraints->col_tags[1], C_TAG_INACTIVE) &&
+                  constraints->bounds[1].lb < 1.0 / 7 &&
+                  constraints->bounds[1].ub == 1.0 / 7);
+    mu_assert("x3 was approximately fixed",
+              !HAS_TAG(constraints->col_tags[2], C_TAG_INACTIVE) &&
+                  constraints->bounds[2].lb == 1.0 / 9 &&
+                  constraints->bounds[2].ub > 1.0 / 9);
+    mu_assert("error offset", prob->obj->offset == 0);
 
     PS_FREE(stgs);
     DEBUG(run_debugger(constraints, false));
@@ -329,33 +315,19 @@ static char *test_5_domain()
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
-    Matrix *A = constraints->A;
     PresolveStatus status = propagate_primal(prob, true);
     mu_assert("error status", status != INFEASIBLE);
-    problem_clean(prob, true);
 
-    // check that new A is correct
-    double Ax_correct[] = {1, -1, 3, -1, -2, 2};
-    int Ai_correct[] = {0, 0, 1, 2, 1, 2};
-    int Ap_correct[] = {0, 1, 4, 6};
-    mu_assert("error Ax", ARRAYS_EQUAL_DOUBLE(Ax_correct, A->x, 6));
-    mu_assert("error Ai", ARRAYS_EQUAL_INT(Ai_correct, A->i, 6));
-    mu_assert("rows", check_row_starts(A, Ap_correct));
-
-    // check that new variable bounds are correct
-    double lbs_correct[] = {0, 0, 0};
-    double ubs_correct[] = {4, INF, INF};
-    mu_assert("error bounds",
-              check_bounds(constraints->bounds, lbs_correct, ubs_correct, 3));
-
-    // check that objective offset is correct
-    mu_assert("error offset", prob->obj->offset == 6);
-
-    // check that lhs and rhs are correct
-    double lhs_correct[] = {-INF, -INF, -2};
-    double rhs_correct[] = {0, 1, INF};
-    mu_assert("error lhs", ARRAYS_EQUAL_DOUBLE(lhs_correct, constraints->lhs, 3));
-    mu_assert("error rhs", ARRAYS_EQUAL_DOUBLE(rhs_correct, constraints->rhs, 3));
+    // Integer propagation must keep a nonempty interval.
+    mu_assert("integer cascade fixed x1",
+              !HAS_TAG(constraints->col_tags[0], C_TAG_INACTIVE) &&
+                  constraints->bounds[0].lb < 4 &&
+                  constraints->bounds[0].ub > 4);
+    mu_assert("integer cascade fixed x2",
+              !HAS_TAG(constraints->col_tags[1], C_TAG_INACTIVE) &&
+                  constraints->bounds[1].lb < 2 &&
+                  constraints->bounds[1].ub == 2);
+    mu_assert("error offset", prob->obj->offset == 0);
 
     PS_FREE(stgs);
     DEBUG(run_debugger(constraints, false));
@@ -396,33 +368,19 @@ static char *test_6_domain()
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
-    Matrix *A = constraints->A;
     PresolveStatus status = propagate_primal(prob, true);
     mu_assert("error status", status != INFEASIBLE);
-    problem_clean(prob, true);
 
-    // check that new A is correct
-    double Ax_correct[] = {-1, -1, 3, -1, -2, 2};
-    int Ai_correct[] = {0, 0, 1, 2, 1, 2};
-    int Ap_correct[] = {0, 1, 4, 6};
-    mu_assert("error Ax", ARRAYS_EQUAL_DOUBLE(Ax_correct, A->x, 6));
-    mu_assert("error Ai", ARRAYS_EQUAL_INT(Ai_correct, A->i, 6));
-    mu_assert("rows", check_row_starts(A, Ap_correct));
-
-    // check that new variable bounds are correct
-    double lbs_correct[] = {1, 0, 0};
-    double ubs_correct[] = {96, INF, INF};
-    mu_assert("error bounds",
-              check_bounds(constraints->bounds, lbs_correct, ubs_correct, 3));
-
-    // check that objective offset is correct
-    mu_assert("error offset", prob->obj->offset == 5);
-
-    // check that lhs and rhs are correct
-    double lhs_correct[] = {-1, -INF, -4};
-    double rhs_correct[] = {INF, 2, INF};
-    mu_assert("error lhs", ARRAYS_EQUAL_DOUBLE(lhs_correct, constraints->lhs, 3));
-    mu_assert("error rhs", ARRAYS_EQUAL_DOUBLE(rhs_correct, constraints->rhs, 3));
+    // Symmetric integer-propagation case.
+    mu_assert("integer cascade fixed x1",
+              !HAS_TAG(constraints->col_tags[0], C_TAG_INACTIVE) &&
+                  constraints->bounds[0].lb < 5 &&
+                  constraints->bounds[0].ub > 5);
+    mu_assert("integer cascade fixed x2",
+              !HAS_TAG(constraints->col_tags[1], C_TAG_INACTIVE) &&
+                  constraints->bounds[1].lb == 0 &&
+                  constraints->bounds[1].ub > 0);
+    mu_assert("error offset", prob->obj->offset == 0);
 
     PS_FREE(stgs);
     DEBUG(run_debugger(constraints, false));
@@ -461,34 +419,19 @@ static char *test_7_domain()
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
-    Matrix *A = constraints->A;
     PresolveStatus status = propagate_primal(prob, true);
     mu_assert("error status", status != INFEASIBLE);
 
-    problem_clean(prob, true);
-
-    // check that new A is correct
-    double Ax_correct[] = {1, 1, 3, -1, -2, 2};
-    int Ai_correct[] = {0, 0, 1, 2, 1, 2};
-    int Ap_correct[] = {0, 1, 4, 6};
-    mu_assert("error Ax", ARRAYS_EQUAL_DOUBLE(Ax_correct, A->x, 6));
-    mu_assert("error Ai", ARRAYS_EQUAL_INT(Ai_correct, A->i, 6));
-    mu_assert("rows", check_row_starts(A, Ap_correct));
-
-    // check that new variable bounds are correct
-    double lbs_correct[] = {0, 0, 0};
-    double ubs_correct[] = {2, INF, INF};
-    mu_assert("error bounds",
-              check_bounds(constraints->bounds, lbs_correct, ubs_correct, 3));
-
-    // check that objective offset is correct
-    mu_assert("error offset", prob->obj->offset == 4);
-
-    // check that lhs and rhs are correct
-    double lhs_correct[] = {2, -INF, -2};
-    double rhs_correct[] = {INF, 3, INF};
-    mu_assert("error lhs", ARRAYS_EQUAL_DOUBLE(lhs_correct, constraints->lhs, 3));
-    mu_assert("error rhs", ARRAYS_EQUAL_DOUBLE(rhs_correct, constraints->rhs, 3));
+    // Check row-order independence.
+    mu_assert("row order fixed x1",
+              !HAS_TAG(constraints->col_tags[0], C_TAG_INACTIVE) &&
+                  constraints->bounds[0].lb < 4 &&
+                  constraints->bounds[0].ub > 4);
+    mu_assert("row order fixed x2",
+              !HAS_TAG(constraints->col_tags[1], C_TAG_INACTIVE) &&
+                  constraints->bounds[1].lb < 2 &&
+                  constraints->bounds[1].ub == 2);
+    mu_assert("error offset", prob->obj->offset == 0);
 
     PS_FREE(stgs);
     DEBUG(run_debugger(constraints, false));
@@ -528,33 +471,18 @@ static char *test_8_domain()
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
-    Matrix *A = constraints->A;
     PresolveStatus status = propagate_primal(prob, true);
     mu_assert("error status", status != INFEASIBLE);
-    problem_clean(prob, true);
 
-    // check that new A is correct
-    double Ax_correct[] = {-1, -1, 3, -1, -2, 2};
-    int Ai_correct[] = {0, 0, 1, 2, 1, 2};
-    int Ap_correct[] = {0, 1, 4, 6};
-    mu_assert("error Ax", ARRAYS_EQUAL_DOUBLE(Ax_correct, A->x, 6));
-    mu_assert("error Ai", ARRAYS_EQUAL_INT(Ai_correct, A->i, 6));
-    mu_assert("rows", check_row_starts(A, Ap_correct));
-
-    // check that new variable bounds are correct
-    double lbs_correct[] = {1, 0, 0};
-    double ubs_correct[] = {96, INF, INF};
-    mu_assert("error bounds",
-              check_bounds(constraints->bounds, lbs_correct, ubs_correct, 3));
-
-    // check that objective offset is correct
-    mu_assert("error offset", prob->obj->offset == 5);
-
-    // check that lhs and rhs are correct
-    double lhs_correct[] = {-1, -INF, -4};
-    double rhs_correct[] = {INF, 2, INF};
-    mu_assert("error lhs", ARRAYS_EQUAL_DOUBLE(lhs_correct, constraints->lhs, 3));
-    mu_assert("error rhs", ARRAYS_EQUAL_DOUBLE(rhs_correct, constraints->rhs, 3));
+    mu_assert("row order fixed x1",
+              !HAS_TAG(constraints->col_tags[0], C_TAG_INACTIVE) &&
+                  constraints->bounds[0].lb < 5 &&
+                  constraints->bounds[0].ub > 5);
+    mu_assert("row order fixed x2",
+              !HAS_TAG(constraints->col_tags[1], C_TAG_INACTIVE) &&
+                  constraints->bounds[1].lb == 0 &&
+                  constraints->bounds[1].ub > 0);
+    mu_assert("error offset", prob->obj->offset == 0);
 
     PS_FREE(stgs);
     DEBUG(run_debugger(constraints, false));
@@ -562,8 +490,7 @@ static char *test_8_domain()
     return 0;
 }
 
-/* Confirm that we can derive integer bounds and then deduce that the variables
-   are implied free*/
+/* Check the safety margin on integer bounds. */
 static char *test_9_domain_integer()
 {
     double Ax[] = {2, 3, 1, 8};
@@ -585,13 +512,16 @@ static char *test_9_domain_integer()
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
-    Matrix *A = constraints->A;
     PresolveStatus status = propagate_primal(prob, true);
     mu_assert("error status", status != INFEASIBLE);
     problem_clean(prob, true);
 
-    mu_assert("error bound", constraints->bounds[0].ub == 4);
-    mu_assert("error bound", constraints->bounds[1].ub == 1);
+    double ub0 = 4 + BOUND_MARGINAL * 4;
+    double ub1 = 1 + BOUND_MARGINAL;
+    mu_assert("integer upper bound was not relaxed",
+              ABS(constraints->bounds[0].ub - ub0) <= 1e-12);
+    mu_assert("integer upper bound was not relaxed",
+              ABS(constraints->bounds[1].ub - ub1) <= 1e-12);
     mu_assert("error bound", !HAS_TAG(constraints->col_tags[0], C_TAG_UB_INF));
     mu_assert("error bound", !HAS_TAG(constraints->col_tags[1], C_TAG_UB_INF));
 
@@ -606,8 +536,7 @@ static char *test_9_domain_integer()
     return 0;
 }
 
-/* Confirm that we can derive decimal bounds and then deduce that the
-   variables are implied free*/
+/* Check the safety margin on decimal bounds. */
 static char *test_9_domain_decimal()
 {
     double Ax[] = {3, 3, 1, 7};
@@ -629,14 +558,18 @@ static char *test_9_domain_decimal()
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
-    Matrix *A = constraints->A;
     PresolveStatus status = propagate_primal(prob, true);
     mu_assert("error status", status != INFEASIBLE);
     problem_clean(prob, true);
 
-    // mu_assert("error bound", IS_EQUAL_FEAS_TOL(constraints->bounds[0].ub, 8
-    // / 3.0)); mu_assert("error bound", IS_EQUAL_FEAS_TOL(constraints->bounds[1].ub,
-    // 8 / 7.0));
+    double raw_ub0 = 8.0 / 3;
+    double raw_ub1 = 8.0 / 7;
+    mu_assert("decimal upper bound was not relaxed",
+              ABS(constraints->bounds[0].ub -
+                  (raw_ub0 + BOUND_MARGINAL * raw_ub0)) <= 1e-12);
+    mu_assert("decimal upper bound was not relaxed",
+              ABS(constraints->bounds[1].ub -
+                  (raw_ub1 + BOUND_MARGINAL * raw_ub1)) <= 1e-12);
     mu_assert("error bound", !HAS_TAG(constraints->col_tags[0], C_TAG_UB_INF));
     mu_assert("error bound", !HAS_TAG(constraints->col_tags[1], C_TAG_UB_INF));
 

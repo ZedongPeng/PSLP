@@ -417,7 +417,7 @@ static inline PresolveStatus run_trivial_explorers(Problem *prob,
 
     // TODO: should we just run this once in the beginning of presolve?
     // Very important question.
-    status = remove_variables_with_close_bounds(prob);
+    status = remove_variables_with_equal_bounds(prob);
     RETURN_IF_INFEASIBLE(status);
 
     if (stgs->dual_fix)

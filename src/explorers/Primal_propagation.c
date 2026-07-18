@@ -63,8 +63,14 @@ static PresolveStatus update_lb_within_propagation(double new_lb, double *lb,
             return INFEASIBLE;
         }
 
-        // check if variable can be fixed
-        if (new_lb >= ub || (ub - new_lb) * get_max_abs(vals, len) <= FEAS_TOL)
+        // Ignore small numerical crossings.
+        if (new_lb > ub)
+        {
+            return UNCHANGED;
+        }
+
+        // Only fix exact point intervals.
+        if (new_lb == ub)
         {
             save_retrieval_bound_change_no_row(constraints->state->postsolve_info,
                                                col, new_lb, ub, false);
@@ -82,11 +88,8 @@ static PresolveStatus update_lb_within_propagation(double new_lb, double *lb,
     if (is_lb_inf || (*finite_bound_tightening && (new_lb - *lb > FEAS_TOL * 1e4) &&
                       (new_lb - *lb > 1e-2 * ABS(*lb))))
     {
-        // very important to scale bound marginal with ABS
-        if (!IS_INTEGRAL(new_lb))
-        {
-            new_lb -= BOUND_MARGINAL * ABS(new_lb);
-        }
+        // Relax all propagated bounds, including integer values.
+        new_lb -= BOUND_MARGINAL * MAX(1.0, ABS(new_lb));
 
         REMOVE_TAG(*cTag, C_TAG_LB_INF);
 
@@ -138,8 +141,14 @@ static PresolveStatus update_ub_within_propagation(double new_ub, double *ub,
             return INFEASIBLE;
         }
 
-        // check if variable can be fixed
-        if (new_ub <= lb || (new_ub - lb) * get_max_abs(vals, len) <= FEAS_TOL)
+        // Ignore small numerical crossings.
+        if (new_ub < lb)
+        {
+            return UNCHANGED;
+        }
+
+        // Only fix exact point intervals.
+        if (new_ub == lb)
         {
             save_retrieval_bound_change_no_row(constraints->state->postsolve_info,
                                                col, new_ub, lb, true);
@@ -157,11 +166,8 @@ static PresolveStatus update_ub_within_propagation(double new_ub, double *ub,
     if (is_ub_inf || (*finite_bound_tightening && (*ub - new_ub > FEAS_TOL * 1e4) &&
                       (*ub - new_ub > 1e-2 * ABS(*ub))))
     {
-        // very important to scale bound marginal with ABS
-        if (!IS_INTEGRAL(new_ub))
-        {
-            new_ub += BOUND_MARGINAL * ABS(new_ub);
-        }
+        // Relax all propagated bounds, including integer values.
+        new_ub += BOUND_MARGINAL * MAX(1.0, ABS(new_ub));
 
         REMOVE_TAG(*cTag, C_TAG_UB_INF);
 

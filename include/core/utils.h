@@ -29,7 +29,4 @@ void rowTagPtr_shrink(RowTag *ptr, const int *map, size_t len);
 void colTagPtr_shrink(ColTag *ptr, const int *map, size_t len);
 void shrink_idx_vector(iVec *vec, const int *map);
 
-/* Other utility functions */
-double get_max_abs(const double *vals, size_t len);
-
 #endif // CORE_UTILS_H
