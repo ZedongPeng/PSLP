@@ -253,6 +253,61 @@ static char *test_map_implied_free_col_singleton()
     return 0;
 }
 
+/*  Column singleton x0 in an equality row, implied free from above only, so
+    the row survives as a one-sided inequality (EQ_TO_INEQ record):
+        min. -x0
+        s.t.  x0 + x1 + x2 = 1,   -1 <= x1 - x2 <= 1,
+              0.5 <= x0 <= 1,  0 <= x1, x2 <= 1.
+    The upper bound of x0 equals the bound implied by the row, so the optimal
+    dual is degenerate: x = (1, 0, 0) is optimal for every y1 in [-1, 0]. Both
+    ends of that interval must map to the (unique) optimal dual of the reduced
+    problem. When y1 = 0 the multiplier sits on the dropped implied bound of x0
+    (z0 = -1), which the map has to redistribute onto the bounds of x1 and x2. */
+static char *test_map_eq_to_ineq_dual_sign()
+{
+    double Ax[] = {1.0, 1.0, 1.0, 1.0, -1.0};
+    int Ai[] = {0, 1, 2, 1, 2};
+    int Ap[] = {0, 3, 5};
+    int nnz = 5;
+    int n_rows = 2;
+    int n_cols = 3;
+
+    double lhs[] = {1.0, -1.0};
+    double rhs[] = {1.0, 1.0};
+    double lbs[] = {0.5, 0.0, 0.0};
+    double ubs[] = {1.0, 1.0, 1.0};
+    double c[] = {-1.0, 0.0, 0.0};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->ston_cols = true;
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    run_presolver(presolver);
+    mu_assert("map eq to ineq dual sign: reduced problem should be 2 x 2",
+              presolver->reduced_prob->m == 2 && presolver->reduced_prob->n == 2);
+
+    double x[] = {1.0, 0.0, 0.0};
+    double y_on_bound[] = {0.0, 0.0};
+    double y_interior[] = {-1.0, 0.0};
+    double z_interior[] = {0.0, 1.0, 1.0};
+
+    double x_red[] = {0.0, 0.0};
+    double y_red[] = {0.0, 0.0};
+    double z_red[] = {1.0, 1.0};
+
+    mu_assert("map eq to ineq dual sign (multiplier on dropped bound) error",
+              check_map_to_reduced(presolver, x, y_on_bound, x_red, y_red, z_red));
+    mu_assert("map eq to ineq dual sign (interior) error",
+              check_map_to_reduced(presolver, x, y_interior, x_red, y_red, z_red));
+    mu_assert(
+        "map eq to ineq dual sign round trip error",
+        check_round_trip(presolver, x, y_interior, z_interior, n_rows, n_cols));
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 /*  Doubleton row used to substitute a free variable
     (same problem as test_8_postsolve). */
 static char *test_map_dton_free_var()
@@ -560,6 +615,7 @@ static const char *all_tests_map_to_reduced()
     mu_run_test(test_map_dton_eq_row, counter_map_to_reduced);
     mu_run_test(test_map_free_col_singletons, counter_map_to_reduced);
     mu_run_test(test_map_implied_free_col_singleton, counter_map_to_reduced);
+    mu_run_test(test_map_eq_to_ineq_dual_sign, counter_map_to_reduced);
     mu_run_test(test_map_dton_free_var, counter_map_to_reduced);
     mu_run_test(test_map_parallel_rows, counter_map_to_reduced);
     mu_run_test(test_map_parallel_rows_eq_remains, counter_map_to_reduced);
