@@ -103,10 +103,20 @@ void postsolver_map_to_reduced(const PostsolveInfo *info, const int *col_map,
         }
         else if (type == EQ_TO_INEQ)
         {
-            // postsolve does yi += ck / aik
+            // postsolve does yi += ck / aik, so the inverse is yi -= ck / aik,
+            // which equals -zk / aik. If zk sits on the bound of xk that presolve
+            // dropped as implied, this has the sign the reduced one-sided row
+            // forbids. That multiplier has no counterpart in the reduced problem;
+            // it belongs on the bounds of the other columns of the row (which sit
+            // at their bounds whenever the implied bound is attained), and
+            // recomputing z_red from y_red puts it there. Projecting yi onto the
+            // admissible sign is exactly that redistribution.
             if (map_dual)
             {
-                y_work[indices[start]] -= vals[start];
+                int i = indices[start];
+                int sign = indices[start + 1];
+                double val = y_work[i] - vals[start];
+                y_work[i] = (sign > 0) ? MAX(val, 0.0) : MIN(val, 0.0);
             }
         }
         else if (type == ADDED_ROW || type == ADDED_ROWS)

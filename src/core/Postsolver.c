@@ -590,7 +590,7 @@ void postsolver_run(const PostsolveInfo *info, Solution *sol, const double *x,
         }
         else if (type == EQ_TO_INEQ)
         {
-            assert(starts[i + 1] - start == 1);
+            assert(starts[i + 1] - start == 2);
             retrieve_eq_to_ineq(sol, indices[start], vals[start]);
         }
         else if (type == PARALLEL_ROW)
@@ -822,11 +822,14 @@ void save_retrieval_parallel_row(PostsolveInfo *info, int i, int j, double ratio
     assert(info->vals->len == info->indices->len);
 }
 
-void save_retrieval_eq_to_ineq(PostsolveInfo *info, int row, double val)
+void save_retrieval_eq_to_ineq(PostsolveInfo *info, int row, double val, int sign)
 {
+    assert(sign == 1 || sign == -1);
     u16Vec_append(info->type, EQ_TO_INEQ);
     iVec_append(info->indices, row);
+    iVec_append(info->indices, sign);
     dVec_append(info->vals, val);
+    dVec_append(info->vals, DUMMY_VALUE);
     iVec_append(info->starts, (int) info->indices->len);
     assert(info->starts->len == info->type->len + 1);
     assert(info->vals->len == info->indices->len);

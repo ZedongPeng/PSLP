@@ -158,12 +158,14 @@ extern "C"
        The map replays the recorded reductions forward: removed rows/columns
        are dropped, merged parallel columns are aggregated, and multipliers of
        merged/eliminated rows are transferred to the rows that replaced them.
-       x_red is projected onto the bounds of the reduced problem. Note that the
-       result is a sensible starting point, not necessarily a feasible or
-       optimal point of the reduced problem. In particular, if (x, y) is optimal
-       for the original problem, (x_red, y_red) is optimal for the reduced
-       problem up to the multipliers of rows that presolve removed as redundant,
-       which are discarded.
+       x_red is projected onto the bounds of the reduced problem. For an
+       arbitrary point the result is a sensible starting point, not necessarily
+       a feasible or optimal point of the reduced problem. If (x, y) is an
+       optimal primal-dual pair of the original problem (with z = c - A^T y
+       implied) and 'relax_bounds' is false, (x_red, y_red, z_red) is an optimal
+       primal-dual point of the reduced problem, up to presolve tolerances.
+       With 'relax_bounds' the multiplier of a relaxed bound is not transferred
+       and optimality is not guaranteed.
 
        After 'free_presolver_reduced_problem', x_red and y_red are still
        computed, but x_red is not projected onto the reduced bounds and z_red is

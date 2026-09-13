@@ -222,9 +222,13 @@ void save_retrieval_parallel_row(PostsolveInfo *info, int i, int j, double ratio
    column k. The postsolve is
    yi = (ck / aik) + yi.
 
-   * info->vals stores [ck / aik].
-   * info->indices stores [i].
+   'sign' is the sign that yi may have after the reduction: -1 if the row kept
+   its rhs (yi <= 0), +1 if it kept its lhs (yi >= 0). Postsolve does not need
+   it; the forward map to the reduced problem projects yi onto it.
+
+   * info->vals stores [ck / aik, dummy].
+   * info->indices stores [i, sign].
 */
-void save_retrieval_eq_to_ineq(PostsolveInfo *info, int row, double val);
+void save_retrieval_eq_to_ineq(PostsolveInfo *info, int row, double val, int sign);
 
 #endif // CORE_POSTSOLVER_H
