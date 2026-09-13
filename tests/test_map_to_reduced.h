@@ -308,6 +308,64 @@ static char *test_map_eq_to_ineq_dual_sign()
     return 0;
 }
 
+/*  Two-sided row whose rhs presolve drops as redundant (check_activities in
+    SimpleReductions.c: the maximal activity 0 equals the rhs), while the row
+    itself survives as x0 + x1 >= -1:
+        min. -x0 - x1
+        s.t.  -1 <= x0 + x1 <= 0,   -1 <= x0, x1 <= 0.
+    x = (0, 0) is optimal for every y in [-1, 0] (z_j = -1 - y). The reduced
+    row only admits y >= 0, so a multiplier sitting on the dropped rhs must be
+    moved onto the bounds of x0 and x1: y_red = 0, z_red = (-1, -1). Presolve
+    leaves no postsolve record for the dropped side, since postsolve needs
+    none; the forward map has to handle it nevertheless (found on the miplib
+    instance physiciansched3-4). */
+static char *test_map_redundant_side_dual_sign()
+{
+    double Ax[] = {1.0, 1.0};
+    int Ai[] = {0, 1};
+    int Ap[] = {0, 2};
+    int nnz = 2;
+    int n_rows = 1;
+    int n_cols = 2;
+
+    double lhs[] = {-1.0};
+    double rhs[] = {0.0};
+    double lbs[] = {-1.0, -1.0};
+    double ubs[] = {0.0, 0.0};
+    double c[] = {-1.0, -1.0};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->primal_propagation = true;
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    run_presolver(presolver);
+    mu_assert("map redundant side: reduced problem should be 1 x 2",
+              presolver->reduced_prob->m == 1 && presolver->reduced_prob->n == 2);
+    mu_assert("map redundant side: the rhs should have been dropped",
+              IS_POS_INF(presolver->reduced_prob->rhs[0]) &&
+                  presolver->reduced_prob->lhs[0] == -1.0);
+
+    double x[] = {0.0, 0.0};
+    double y_on_side[] = {-1.0};
+    double y_zero[] = {0.0};
+    double z_zero[] = {-1.0, -1.0};
+
+    double x_red[] = {0.0, 0.0};
+    double y_red[] = {0.0};
+    double z_red[] = {-1.0, -1.0};
+
+    mu_assert("map redundant side (multiplier on dropped side) error",
+              check_map_to_reduced(presolver, x, y_on_side, x_red, y_red, z_red));
+    mu_assert("map redundant side (multiplier on bounds) error",
+              check_map_to_reduced(presolver, x, y_zero, x_red, y_red, z_red));
+    mu_assert("map redundant side round trip error",
+              check_round_trip(presolver, x, y_zero, z_zero, n_rows, n_cols));
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 /*  Doubleton row used to substitute a free variable
     (same problem as test_8_postsolve). */
 static char *test_map_dton_free_var()
@@ -616,6 +674,7 @@ static const char *all_tests_map_to_reduced()
     mu_run_test(test_map_free_col_singletons, counter_map_to_reduced);
     mu_run_test(test_map_implied_free_col_singleton, counter_map_to_reduced);
     mu_run_test(test_map_eq_to_ineq_dual_sign, counter_map_to_reduced);
+    mu_run_test(test_map_redundant_side_dual_sign, counter_map_to_reduced);
     mu_run_test(test_map_dton_free_var, counter_map_to_reduced);
     mu_run_test(test_map_parallel_rows, counter_map_to_reduced);
     mu_run_test(test_map_parallel_rows_eq_remains, counter_map_to_reduced);
