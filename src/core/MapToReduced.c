@@ -70,7 +70,9 @@ void postsolver_map_to_reduced(const PostsolveInfo *info, const int *col_map,
     // the reductions were made, but only for reductions that modify a row or
     // column that survives in the reduced problem. Removed rows and columns are
     // dropped by the maps at the end, and z is not mapped at all since the
-    // caller recomputes it from the reduced problem data.
+    // caller recomputes it from the reduced problem data. Reductions that
+    // shrink the admissible sign of a surviving row's multiplier (EQ_TO_INEQ,
+    // SIDE_RELAXED) project the multiplier onto that sign.
     for (int t = 0; t < n_reductions; ++t)
     {
         ReductionType type = reductions[t];
@@ -117,6 +119,24 @@ void postsolver_map_to_reduced(const PostsolveInfo *info, const int *col_map,
                 int sign = indices[start + 1];
                 double val = y_work[i] - vals[start];
                 y_work[i] = (sign > 0) ? MAX(val, 0.0) : MIN(val, 0.0);
+            }
+        }
+        else if (type == SIDE_RELAXED)
+        {
+            // a finite side of row i was dropped as implied by the column
+            // bounds. A multiplier sitting on that side is a nonnegative
+            // combination of those bounds (which are attained whenever the side
+            // is active), so it belongs on the bounds of the row's columns in
+            // the reduced problem; recomputing z_red from y_red puts it there.
+            // Projecting yi onto the sign the surviving side admits is exactly
+            // that redistribution. It must happen even if row i is removed
+            // later: a later PARALLEL_ROW record may transfer y_work[i] to
+            // another row.
+            if (map_dual)
+            {
+                int i = indices[start];
+                int sign = indices[start + 1];
+                y_work[i] = (sign > 0) ? MAX(y_work[i], 0.0) : MIN(y_work[i], 0.0);
             }
         }
         else if (type == ADDED_ROW || type == ADDED_ROWS)

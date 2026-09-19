@@ -466,7 +466,7 @@ void postsolver_run_primal_infeas_ray(const PostsolveInfo *info, Solution *sol,
         {
             assert(starts[i + 1] - start == 2);
         }
-        else if (type == PARALLEL_ROW)
+        else if (type == PARALLEL_ROW || type == SIDE_RELAXED)
         {
             // only used by postsolver_map_to_reduced
             assert(starts[i + 1] - start == 2);
@@ -599,7 +599,7 @@ void postsolver_run_dual_infeas_ray(const PostsolveInfo *info, Solution *sol,
         {
             assert(starts[i + 1] - start == 2);
         }
-        else if (type == PARALLEL_ROW)
+        else if (type == PARALLEL_ROW || type == SIDE_RELAXED)
         {
             // only used by postsolver_map_to_reduced
             assert(starts[i + 1] - start == 2);

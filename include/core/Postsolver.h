@@ -57,6 +57,7 @@ enum ReductionTypes
 
     // only required for mapping a solution to the reduced problem
     PARALLEL_ROW = 1 << 11,
+    SIDE_RELAXED = 1 << 12,
 };
 
 typedef struct PostsolveInfo
@@ -230,5 +231,22 @@ void save_retrieval_parallel_row(PostsolveInfo *info, int i, int j, double ratio
    * info->indices stores [i, sign].
 */
 void save_retrieval_eq_to_ineq(PostsolveInfo *info, int row, double val, int sign);
+
+/* This function saves that a finite side of row i was dropped because the
+   activity bounds of the row made it redundant (check_activities in
+   SimpleReductions.c). Postsolve needs nothing: A, c and the other side are
+   unchanged. The forward map to the reduced problem projects yi onto the sign
+   the surviving side admits: sign = -1 if the row kept its rhs (yi <= 0), +1 if
+   it kept its lhs (yi >= 0). For an optimal (x, y), a multiplier of the dropped
+   sign is a nonnegative combination of the bounds of the row's columns, which
+   are at those bounds whenever the side is active, so recomputing z from the
+   projected y moves it onto them. (The column analogue, a bound dropped by
+   remove_redundant_bounds under relax_bounds, has no record; the map is not
+   supported with relax_bounds.)
+
+   * info->vals stores [dummy, dummy].
+   * info->indices stores [i, sign].
+*/
+void save_retrieval_side_relaxed(PostsolveInfo *info, int row, int sign);
 
 #endif // CORE_POSTSOLVER_H

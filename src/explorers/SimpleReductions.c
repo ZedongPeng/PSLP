@@ -418,6 +418,10 @@ PresolveStatus check_activities(Problem *prob)
                 }
             }
 
+            // postsolve needs no record of this, but the forward map to the
+            // reduced problem does: the row now only admits y <= 0
+            save_retrieval_side_relaxed(prob->constraints->state->postsolve_info,
+                                        row, -1);
             prob->constraints->lhs[row] = -INF;
         }
         // ----------------------------------------------------------------
@@ -445,6 +449,10 @@ PresolveStatus check_activities(Problem *prob)
                 }
             }
 
+            // postsolve needs no record of this, but the forward map to the
+            // reduced problem does: the row now only admits y >= 0
+            save_retrieval_side_relaxed(prob->constraints->state->postsolve_info,
+                                        row, 1);
             prob->constraints->rhs[row] = INF;
         }
         // ----------------------------------------------------------------

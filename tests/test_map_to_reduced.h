@@ -26,6 +26,19 @@ static bool check_map_to_reduced(Presolver *presolver, const double *x,
     double x_red[MAP_MAX_DIM], y_red[MAP_MAX_DIM], z_red[MAP_MAX_DIM];
     assert(n <= MAP_MAX_DIM && m <= MAP_MAX_DIM);
     map_solution_to_reduced(presolver, x, y, x_red, y_red, z_red);
+
+    // every reduced row admits only the sign of its finite side(s)
+    for (size_t i = 0; i < m; ++i)
+    {
+        if ((IS_NEG_INF(presolver->reduced_prob->lhs[i]) && y_red[i] > MAP_TOL) ||
+            (IS_POS_INF(presolver->reduced_prob->rhs[i]) && y_red[i] < -MAP_TOL))
+        {
+            printf("y_red[%zu] = %g has a sign the reduced row forbids\n", i,
+                   y_red[i]);
+            return false;
+        }
+    }
+
     return is_solution_correct(x_red, x_red_correct, y_red, y_red_correct, z_red,
                                z_red_correct, (int) m, (int) n, MAP_TOL);
 }
