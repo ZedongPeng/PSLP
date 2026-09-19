@@ -142,6 +142,24 @@ extern "C"
     void postsolve(Presolver *presolver, const double *x, const double *y,
                    const double *z);
 
+    /* Map a primal-dual point (x, y) of the original problem to the reduced
+       problem. This can be used to warm start a solver on the reduced problem.
+       Must be called after 'run_presolver' has returned UNCHANGED or REDUCED.
+
+       x has length n and y has length m (original dimensions). On return, x_red
+       (length reduced_prob->n) and y_red (length reduced_prob->m) hold the
+       mapped point and z_red (length reduced_prob->n) holds z_red = c_red -
+       A_red^T y_red. Any output pointer may be NULL to skip that part; x_red
+       requires x, y_red requires y, and z_red requires y_red. The function does
+       not modify presolver->sol.
+
+       The semantics are as follows. If (x, y) is an optimal primal-dual point
+       of the original problem and 'relax_bounds' is false, (x_red, y_red,
+       z_red) is an optimal primal-dual point of the reduced problem. */
+    void map_original_sol_to_reduced(Presolver *presolver, const double *x,
+                                     const double *y, double *x_red, double *y_red,
+                                     double *z_red);
+
     /* Postsolve a primal infeasibility ray y of the reduced problem.
        The function writes the corresponding ray for the original problem
        to y_orig. It does not check whether y is a valid ray.
