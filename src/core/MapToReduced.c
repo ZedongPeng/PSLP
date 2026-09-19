@@ -193,10 +193,7 @@ void postsolver_map_to_reduced(const PostsolveInfo *info, const int *col_map,
 static void compute_reduced_dual_slack(double *z, const PresolvedProblem *prob,
                                        const double *y)
 {
-    for (size_t j = 0; j < prob->n; ++j)
-    {
-        z[j] = prob->c[j];
-    }
+    memcpy(z, prob->c, prob->n * sizeof(double));
 
     for (size_t i = 0; i < prob->m; ++i)
     {
