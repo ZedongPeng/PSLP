@@ -25,7 +25,7 @@ static bool check_map_to_reduced(Presolver *presolver, const double *x,
     size_t m = presolver->reduced_prob->m;
     double x_red[MAP_MAX_DIM], y_red[MAP_MAX_DIM], z_red[MAP_MAX_DIM];
     assert(n <= MAP_MAX_DIM && m <= MAP_MAX_DIM);
-    map_solution_to_reduced(presolver, x, y, x_red, y_red, z_red);
+    map_original_sol_to_reduced(presolver, x, y, x_red, y_red, z_red);
 
     // every reduced row admits only the sign of its finite side(s)
     for (size_t i = 0; i < m; ++i)
@@ -52,7 +52,7 @@ static bool check_round_trip(Presolver *presolver, const double *x, const double
     size_t m = presolver->reduced_prob->m;
     double x_red[MAP_MAX_DIM], y_red[MAP_MAX_DIM], z_red[MAP_MAX_DIM];
     assert(n <= MAP_MAX_DIM && m <= MAP_MAX_DIM);
-    map_solution_to_reduced(presolver, x, y, x_red, y_red, z_red);
+    map_original_sol_to_reduced(presolver, x, y, x_red, y_red, z_red);
     postsolve(presolver, x_red, y_red, z_red);
     return is_solution_correct(presolver->sol->x, x, presolver->sol->y, y,
                                presolver->sol->z, z, (int) n_rows, (int) n_cols,
@@ -102,14 +102,14 @@ static char *test_map_ston_row()
 
     // mapping must not touch the solution obtained by postsolve above
     double x_only[7], y_only[2];
-    map_solution_to_reduced(presolver, x, y, x_only, y_only, NULL);
+    map_original_sol_to_reduced(presolver, x, y, x_only, y_only, NULL);
     mu_assert("map ston row must not modify presolver->sol",
               is_solution_correct(presolver->sol->x, x, presolver->sol->y, y,
                                   presolver->sol->z, z, n_rows, n_cols, MAP_TOL));
 
     // the primal and dual parts can be mapped independently
-    map_solution_to_reduced(presolver, x, NULL, x_only, NULL, NULL);
-    map_solution_to_reduced(presolver, NULL, y, NULL, y_only, NULL);
+    map_original_sol_to_reduced(presolver, x, NULL, x_only, NULL, NULL);
+    map_original_sol_to_reduced(presolver, NULL, y, NULL, y_only, NULL);
     for (int i = 0; i < 7; ++i)
     {
         mu_assert("map ston row primal only error",
@@ -124,8 +124,8 @@ static char *test_map_ston_row()
     // a missing input leaves the corresponding output untouched
     double untouched[7] = {DUMMY_VALUE, DUMMY_VALUE, DUMMY_VALUE, DUMMY_VALUE,
                            DUMMY_VALUE, DUMMY_VALUE, DUMMY_VALUE};
-    map_solution_to_reduced(presolver, NULL, y, untouched, y_only, NULL);
-    map_solution_to_reduced(presolver, x, NULL, x_only, untouched, NULL);
+    map_original_sol_to_reduced(presolver, NULL, y, untouched, y_only, NULL);
+    map_original_sol_to_reduced(presolver, x, NULL, x_only, untouched, NULL);
     for (int i = 0; i < 7; ++i)
     {
         mu_assert("map ston row missing input error", untouched[i] == DUMMY_VALUE);
@@ -661,7 +661,7 @@ static char *test_map_after_free_reduced_problem()
 
     double x_red[4], y_red[2];
     double z_red[4] = {DUMMY_VALUE, DUMMY_VALUE, DUMMY_VALUE, DUMMY_VALUE};
-    map_solution_to_reduced(presolver, x, y, x_red, y_red, z_red);
+    map_original_sol_to_reduced(presolver, x, y, x_red, y_red, z_red);
 
     for (int i = 0; i < 4; ++i)
     {

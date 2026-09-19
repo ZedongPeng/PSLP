@@ -18,7 +18,7 @@
 
 /* Maps a primal-dual point of the original problem to the reduced problem
    (the inverse direction of postsolve), e.g. to warm start a solver on the
-   reduced problem. The public entry point is 'map_solution_to_reduced' in
+   reduced problem. The public entry point is 'map_original_sol_to_reduced' in
    PSLP_API.h; the core replay of the recorded reductions is
    'postsolver_map_to_reduced', declared in Postsolver.h. */
 
@@ -204,8 +204,9 @@ static void compute_reduced_dual_slack(double *z, const PresolvedProblem *prob,
     }
 }
 
-void map_solution_to_reduced(Presolver *presolver, const double *x, const double *y,
-                             double *x_red, double *y_red, double *z_red)
+void map_original_sol_to_reduced(Presolver *presolver, const double *x,
+                                 const double *y, double *x_red, double *y_red,
+                                 double *z_red)
 {
     Solution *sol = presolver->sol;
     State *data = presolver->prob->constraints->state;
@@ -217,22 +218,24 @@ void map_solution_to_reduced(Presolver *presolver, const double *x, const double
 
     if (x_red && !x)
     {
-        fprintf(stderr, "PSLP warning: map_solution_to_reduced needs x to compute "
-                        "x_red! x_red is left untouched. \n");
+        fprintf(stderr,
+                "PSLP warning: map_original_sol_to_reduced needs x to compute "
+                "x_red! x_red is left untouched. \n");
         x_red = NULL;
     }
 
     if (y_red && !y)
     {
-        fprintf(stderr, "PSLP warning: map_solution_to_reduced needs y to compute "
-                        "y_red! y_red and z_red are left untouched. \n");
+        fprintf(stderr,
+                "PSLP warning: map_original_sol_to_reduced needs y to compute "
+                "y_red! y_red and z_red are left untouched. \n");
         y_red = NULL;
         z_red = NULL;
     }
 
     if (z_red && !y_red)
     {
-        fprintf(stderr, "PSLP warning: map_solution_to_reduced needs y_red to "
+        fprintf(stderr, "PSLP warning: map_original_sol_to_reduced needs y_red to "
                         "compute z_red! z_red is left untouched. \n");
         z_red = NULL;
     }
@@ -247,8 +250,9 @@ void map_solution_to_reduced(Presolver *presolver, const double *x, const double
     work = (double *) ps_malloc(n_cols_orig + n_rows_orig + 1, sizeof(double));
     if (!work)
     {
-        fprintf(stderr, "PSLP warning: map_solution_to_reduced failed to allocate "
-                        "memory! Outputs are left untouched. \n");
+        fprintf(stderr,
+                "PSLP warning: map_original_sol_to_reduced failed to allocate "
+                "memory! Outputs are left untouched. \n");
         return;
     }
 
@@ -278,7 +282,7 @@ void map_solution_to_reduced(Presolver *presolver, const double *x, const double
     {
         // The reduced problem data was released by
         // 'free_presolver_reduced_problem', so z_red cannot be computed.
-        fprintf(stderr, "PSLP warning: map_solution_to_reduced called after "
+        fprintf(stderr, "PSLP warning: map_original_sol_to_reduced called after "
                         "free_presolver_reduced_problem! z_red is left "
                         "untouched. \n");
         return;

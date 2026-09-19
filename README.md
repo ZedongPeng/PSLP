@@ -55,7 +55,7 @@ in that folder contain some trivial public data structures. The API consists of 
 3. **Postsolve** — performed using `postsolve()`, which recovers a primal-dual
    solution to the original LP from a primal-dual solution to the reduced problem.
 
-In addition, `map_solution_to_reduced()` maps a primal-dual point of the
+In addition, `map_original_sol_to_reduced()` maps a primal-dual point of the
 original LP to the reduced LP, e.g. to warm start a solver on the reduced
 problem from a solution of the original one. See `PSLP_API.h` for details.
 
