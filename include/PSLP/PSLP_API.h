@@ -112,11 +112,17 @@ extern "C"
        ubs, and c. The user is responsible for freeing the presolver using
        'free_presolver'. If the allocation fails, the function returns NULL.
        The matrix should be given in CSR form. Since the row pointers are ints,
-       nnz must be at most INT_MAX; otherwise the function returns NULL.*/
+       nnz must be at most INT_MAX; otherwise the function returns NULL.
+
+       (Px, Pi, Pp, Pnnz) is the n x n matrix P of the quadratic objective term
+       (1/2) x'Px in CSR form, given as the full symmetric matrix (both
+       triangles). Pp == NULL or Pnnz == 0 means P = 0, i.e. an LP. A non-empty
+       P is not supported yet and makes the function return NULL. */
     Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap,
                              size_t m, size_t n, size_t nnz, const double *lhs,
                              const double *rhs, const double *lbs, const double *ubs,
-                             const double *c, const Settings *stgs);
+                             const double *c, const double *Px, const int *Pi,
+                             const int *Pp, size_t Pnnz, const Settings *stgs);
 
     /* Free the memory allocated for the presolver. */
     void free_presolver(Presolver *presolver);

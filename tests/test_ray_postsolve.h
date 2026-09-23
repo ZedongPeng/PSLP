@@ -67,8 +67,8 @@ static char *test_0_primal_ray_postsolve()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("primal ray postsolve presolve status", status == UNCHANGED);
@@ -105,8 +105,8 @@ static char *test_0_dual_ray_postsolve()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("dual ray postsolve presolve status", status == UNCHANGED);
@@ -143,8 +143,8 @@ static char *test_singleton_eq_primal_ray_postsolve()
     Settings *stgs = default_settings();
     set_settings_true(stgs);
     stgs->parallel_cols = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -184,8 +184,8 @@ static char *test_dton_primal_ray_postsolve()
     Settings *stgs = default_settings();
     set_settings_true(stgs);
     stgs->parallel_cols = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -225,8 +225,8 @@ static char *test_bound_change_primal_ray_postsolve()
     Settings *stgs = default_settings();
     set_settings_true(stgs);
     stgs->parallel_cols = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -297,8 +297,8 @@ static char *test_fix_col_inf_primal_ray_postsolve()
     set_settings_true(stgs);
     stgs->parallel_cols = false;
     stgs->primal_propagation = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -338,8 +338,8 @@ static char *test_fix_col_inf_dual_ray_postsolve()
     set_settings_true(stgs);
     stgs->parallel_cols = false;
     stgs->primal_propagation = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -647,8 +647,8 @@ static char *test_infeasible_rhs_change_primal_ray_postsolve()
     stgs->primal_propagation = false;
     stgs->parallel_cols = false;
     stgs->dual_fix = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -687,8 +687,8 @@ static char *test_infeasible_lhs_change_primal_ray_postsolve()
     stgs->primal_propagation = false;
     stgs->parallel_cols = false;
     stgs->dual_fix = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -730,8 +730,8 @@ static char *test_infeasible_both_sides_changed_primal_ray_postsolve()
     stgs->primal_propagation = false;
     stgs->parallel_cols = false;
     stgs->dual_fix = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -769,8 +769,8 @@ static char *test_infeasible_bound_change_primal_ray_postsolve()
     set_settings_true(stgs);
     stgs->primal_propagation = false;
     stgs->dual_fix = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -808,8 +808,8 @@ static char *test_infeasible_parallel_col_primal_ray_postsolve()
     set_settings_true(stgs);
     stgs->primal_propagation = false;
     stgs->dual_fix = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -846,8 +846,8 @@ static char *test_infeasible_fix_col_inf_primal_ray_postsolve()
     Settings *stgs = default_settings();
     set_settings_true(stgs);
     stgs->primal_propagation = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -886,8 +886,8 @@ static char *test_unbounded_fix_col_inf_dual_ray_postsolve()
     stgs->primal_propagation = false;
     stgs->parallel_rows = false;
     stgs->parallel_cols = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 
@@ -926,8 +926,8 @@ static char *test_unbounded_negated_fix_col_inf_dual_ray_postsolve()
     stgs->primal_propagation = false;
     stgs->parallel_rows = false;
     stgs->parallel_cols = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     run_presolver(presolver);
 

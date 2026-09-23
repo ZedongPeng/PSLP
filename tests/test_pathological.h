@@ -36,8 +36,8 @@ static const char *test_infeasible_bounds()
 
     Settings *stgs = default_settings();
     set_settings_true(stgs);
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("infeasible bounds failed", status == INFEASIBLE);
@@ -64,8 +64,8 @@ static const char *test_infeasible_bounds_after_stonrow()
 
     Settings *stgs = default_settings();
     set_settings_true(stgs);
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("no linear constraints failed", status == INFEASIBLE);
@@ -93,8 +93,8 @@ static const char *test_infeasible_parallel_rows()
     Settings *stgs = default_settings();
     set_settings_true(stgs);
     stgs->parallel_rows = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("no linear constraints failed", status == INFEASIBLE);
@@ -122,8 +122,8 @@ static const char *test_unbounded_sol()
     Settings *stgs = default_settings();
     set_settings_true(stgs);
     stgs->parallel_rows = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("no linear constraints failed", status == UNBNDORINFEAS);
@@ -149,8 +149,8 @@ static const char *test_no_linear_constraints_infeasible()
 
     Settings *stgs = default_settings();
     set_settings_true(stgs);
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("no linear constraints failed", status == INFEASIBLE);
@@ -176,8 +176,8 @@ static const char *test_no_linear_constraints_feasible()
 
     Settings *stgs = default_settings();
     set_settings_true(stgs);
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("no linear constraints failed", status == REDUCED);
@@ -213,8 +213,8 @@ static const char *test_zedongs_example()
 
     Settings *stgs = default_settings();
     set_settings_true(stgs);
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("no linear constraints failed", status == REDUCED);
@@ -240,8 +240,8 @@ static const char *test_unbounded_Zedongs_example()
 
     Settings *stgs = default_settings();
     set_settings_true(stgs);
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PresolveStatus status = run_presolver(presolver);
     mu_assert("no linear constraints failed", status == UNBNDORINFEAS);

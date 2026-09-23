@@ -46,7 +46,9 @@ The public C API is defined in the header file `PSLP_API.h`. The other files
 in that folder contain some trivial public data structures. The API consists of three main operations:
 
 1. **Initialization** — performed using `new_presolver()`, which creates and
-   initializes internal data structures used by the presolver.  
+   initializes internal data structures used by the presolver. Its last
+   arguments describe the quadratic objective matrix $P$ (pass `NULL`/`0` for an
+   LP).  
 
 2. **Presolve** — performed using `run_presolver()`, which executes the presolve
    routines to reduce the LP. The reduced LP is available in the struct
