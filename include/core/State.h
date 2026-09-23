@@ -62,7 +62,7 @@ State *new_state(int *row_sizes, int *col_sizes, int *P_row_sizes,
                  const RowTag *row_tags);
 void free_state(State *data);
 
-/* True if column k has a non-empty row in P. Such a variable is never fixed,
+/* True if column k has a non-empty row in P. Such a variable is never
    substituted or dual-reduced. For an inactive column the row size is
    SIZE_INACTIVE_COL and this returns true; callers test C_TAG_INACTIVE
    first. */

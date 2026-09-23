@@ -66,11 +66,6 @@ static PresolveStatus update_lb_within_propagation(double new_lb, double *lb,
         // check if variable can be fixed
         if (new_lb >= ub || (ub - new_lb) * get_max_abs(vals, len) <= FEAS_TOL)
         {
-            if (col_in_P(constraints->state, col))
-            {
-                return UNCHANGED;
-            }
-
             save_retrieval_bound_change_no_row(constraints->state->postsolve_info,
                                                col, new_lb, ub, false);
 
@@ -146,11 +141,6 @@ static PresolveStatus update_ub_within_propagation(double new_ub, double *ub,
         // check if variable can be fixed
         if (new_ub <= lb || (new_ub - lb) * get_max_abs(vals, len) <= FEAS_TOL)
         {
-            if (col_in_P(constraints->state, col))
-            {
-                return UNCHANGED;
-            }
-
             save_retrieval_bound_change_no_row(constraints->state->postsolve_info,
                                                col, new_ub, lb, true);
 

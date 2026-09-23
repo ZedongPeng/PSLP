@@ -22,14 +22,17 @@
 #include "u16Vec.h"
 #include <stdio.h>
 
-/* Tests for the quadratic objective term (1/2) x'Px. The presolver never
-   modifies P: a variable that appears in P is never fixed, substituted or
-   dual-reduced, so it stays in the reduced problem.
+/* Tests for the quadratic objective term (1/2) x'Px. A variable that
+   appears in P can be fixed (its row and column of P are folded away); it is
+   never substituted or dual-reduced.
    Test 1: structural validation of P in new_presolver
+   Test 2: fix_col folds the coupling terms of P into c and removes the
+           row/column of P
    Test 4: empty columns: fixed by the sign of c when absent from P, kept
            when present in P
    Test 5: simple dual fix skips a variable that appears in P
    Test 7: parallel columns are not merged when one of them appears in P
+   Test 9: primal propagation fixing coupled variables (bound-change replay)
    (doubleton equality rows are not supported for QPs yet; new_presolver
    returns NULL if dton_eq is set)
 */
@@ -176,6 +179,87 @@ static char *test_1_qp()
     }
 
     PS_FREE(stgs);
+    return 0;
+}
+
+/*  Direct fix_col with a coupling term.
+    min. (1/2) x'Px + [1 -1 0.5] x,  P = [2 1 0; 1 2 0; 0 0 4]
+    s.t. x0 + x1 + x2 <= 10, 0 <= x <= 5
+    Fixing x0 = 2 gives offset = 1*2 + (1/2)*2*4 = 6, c1 = -1 + 1*2 = 1,
+    and P = [2 0; 0 4] on (x1, x2). */
+static char *test_2_qp()
+{
+    double Ax[] = {1, 1, 1};
+    int Ai[] = {0, 1, 2};
+    int Ap[] = {0, 3};
+    double lhs[] = {-INF};
+    double rhs[] = {10};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {5, 5, 5};
+    double c[] = {1, -1, 0.5};
+    double Px[] = {2, 1, 1, 2, 4};
+    int Pi[] = {0, 1, 0, 1, 2};
+    int Pp[] = {0, 2, 4, 5};
+
+    Settings *stgs = default_settings();
+    stgs->verbose = false;
+    stgs->dton_eq = false;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, 1, 3, 3, lhs, rhs, lbs, ubs, c,
+                                         Px, Pi, Pp, 5, stgs);
+    mu_assert("init", presolver != NULL);
+    Problem *prob = presolver->prob;
+    Constraints *constraints = prob->constraints;
+    State *state = constraints->state;
+    Matrix *P = prob->obj->P;
+    DEBUG(run_debugger_problem(prob, false));
+
+    mu_assert("status", fix_col(prob, 0, 2.0) == REDUCED);
+
+    // objective is updated eagerly
+    mu_assert("offset", prob->obj->offset == 6.0);
+    mu_assert("c after fold", prob->obj->c[1] == 1.0 && prob->obj->c[2] == 0.5);
+
+    // row and column 0 of P are gone
+    mu_assert("P nnz", P->nnz == 2);
+    mu_assert("P row sizes", state->P_row_sizes[0] == SIZE_INACTIVE_COL &&
+                                 state->P_row_sizes[1] == 1 &&
+                                 state->P_row_sizes[2] == 1);
+    mu_assert("P row 0 empty", P->p[0].start == P->p[0].end);
+    mu_assert("P row 1", P->p[1].end - P->p[1].start == 1 &&
+                             P->i[P->p[1].start] == 1 && P->x[P->p[1].start] == 2.0);
+
+    // the postsolve record carries the folded c0 and the P row (2 entries)
+    PostsolveInfo *info = state->postsolve_info;
+    mu_assert("one record",
+              info->type->len == 1 && info->type->data[0] == FIXED_COL);
+    FixedColRecord rec = decode_fixed_col(info->indices->data, info->vals->data,
+                                          info->starts->data[1]);
+    mu_assert("record col/val/ck", rec.col == 0 && rec.val == 2.0 && rec.ck == 1.0);
+    mu_assert("record a", rec.len == 1 && rec.rows[0] == 0 && rec.vals[0] == 1);
+    mu_assert("record P", rec.P_len == 2 && rec.P_cols[0] == 0 &&
+                              rec.P_vals[0] == 2 && rec.P_cols[1] == 1 &&
+                              rec.P_vals[1] == 1);
+
+    delete_fixed_cols_from_problem(prob);
+    delete_inactive_cols_from_A_and_AT(constraints);
+    mu_assert("rhs", constraints->rhs[0] == 8.0);
+    DEBUG(run_debugger_problem(prob, false));
+
+    problem_clean(prob);
+    DEBUG(run_debugger_problem(prob, true));
+    mu_assert("P dims after clean", P->m == 2 && P->n == 2 && P->nnz == 2);
+    double Px_correct[] = {2, 4};
+    int Pi_correct[] = {0, 1};
+    int Pp_correct[] = {0, 1, 2};
+    mu_assert("Px after clean", ARRAYS_EQUAL_DOUBLE(Px_correct, P->x, 2));
+    mu_assert("Pi after clean", ARRAYS_EQUAL_INT(Pi_correct, P->i, 2));
+    mu_assert("Pp after clean", check_row_starts(P, Pp_correct));
+    mu_assert("c after clean", prob->obj->c[0] == 1.0 && prob->obj->c[1] == 0.5);
+    mu_assert("P row sizes after clean",
+              state->P_row_sizes[0] == 1 && state->P_row_sizes[1] == 1);
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
     return 0;
 }
 
@@ -371,12 +455,68 @@ static char *test_7_qp()
     return 0;
 }
 
+/*  Primal propagation fixing two coupled variables (the FIXED_COL records
+    are replayed inside the bound-change walk of the postsolver).
+    min. (1/2) x'Px + [1 1] x,  P = [2 1; 1 2]
+    s.t. x0 + x1 <= 0, 0 <= x <= 10
+    Both variables are forced to 0, so the reduced problem is empty and the
+    solution is x = 0, y = 0, z = (1, 1). */
+static char *test_9_qp()
+{
+    double Ax[] = {1, 1};
+    int Ai[] = {0, 1};
+    int Ap[] = {0, 2};
+    int n_rows = 1, n_cols = 2;
+    double lhs[] = {-INF};
+    double rhs[] = {0};
+    double lbs[] = {0, 0};
+    double ubs[] = {10, 10};
+    double c[] = {1, 1};
+    double Px[] = {2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1};
+    int Pp[] = {0, 2, 4};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->primal_propagation = true;
+    stgs->finite_bound_tightening = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims", red->m == 0 && red->n == 0 && red->Pnnz == 0);
+    mu_assert("reduced offset", red->obj_offset == 0.0);
+
+    postsolve(presolver, NULL, NULL, NULL);
+
+    double correct_x[] = {0, 0};
+    double correct_y[] = {0};
+    double correct_z[] = {1, 1};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
+    mu_run_test(test_2_qp, counter_qp);
     mu_run_test(test_4_qp, counter_qp);
     mu_run_test(test_5_qp, counter_qp);
     mu_run_test(test_7_qp, counter_qp);
+    mu_run_test(test_9_qp, counter_qp);
     return 0;
 }
 

@@ -52,14 +52,16 @@ PresolveStatus fix_col(Problem *prob, int col, double val)
     const int *rows = AT->i + AT->p[col].start;
     int len = AT->p[col].end - AT->p[col].start;
 
-    assert(!col_in_P(data, col));
-    assert(prob->obj->P->p[col].start == prob->obj->P->p[col].end);
-
     // The postsolve record is saved before the objective is updated so that
-    // both see the same c[col]; the objective update is the last reader of it.
+    // both see the same c[col] and row col of P; the objective update is the
+    // last reader of them.
+    const Matrix *P = prob->obj->P;
+    assert(data->P_row_sizes[col] == P->p[col].end - P->p[col].start);
     set_col_to_fixed(col, col_tag, data->fixed_cols_to_delete);
     save_retrieval_fixed_col(data->postsolve_info, col, val, prob->obj->c[col], vals,
-                             rows, (size_t) len);
+                             rows, (size_t) len, P->x + P->p[col].start,
+                             P->i + P->p[col].start,
+                             (size_t) data->P_row_sizes[col]);
     fix_var_in_obj(prob, col, val);
 
     bool ub_update = (is_ub_inf || val != old_ub);
