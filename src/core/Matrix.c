@@ -105,7 +105,8 @@ Matrix *matrix_new_no_extra_space(const double *Ax, const int *Ai, const int *Ap
     A->m = n_rows;
     A->n = n_cols;
     A->nnz = nnz;
-    A->n_alloc = nnz;
+    /* avoid a zero-size allocation for an empty matrix */
+    A->n_alloc = MAX(nnz, 1);
     A->i = (int *) ps_malloc(A->n_alloc, sizeof(int));
     A->p = (RowRange *) ps_malloc(n_rows + 1, sizeof(RowRange));
     A->x = (double *) ps_malloc(A->n_alloc, sizeof(double));
@@ -116,8 +117,19 @@ Matrix *matrix_new_no_extra_space(const double *Ax, const int *Ai, const int *Ap
         return NULL;
     }
 
-    memcpy(A->x, Ax, nnz * sizeof(double));
-    memcpy(A->i, Ai, nnz * sizeof(int));
+    /* Ap == NULL means an empty matrix */
+    if (Ap == NULL)
+    {
+        assert(nnz == 0);
+        memset(A->p, 0, (n_rows + 1) * sizeof(RowRange));
+        return A;
+    }
+
+    if (nnz > 0)
+    {
+        memcpy(A->x, Ax, nnz * sizeof(double));
+        memcpy(A->i, Ai, nnz * sizeof(int));
+    }
 
     for (int i = 0; i < n_rows; ++i)
     {
@@ -131,6 +143,37 @@ Matrix *matrix_new_no_extra_space(const double *Ax, const int *Ai, const int *Ap
     remove_explicit_zeros(A);
 
     return A;
+}
+
+bool matrix_is_symmetric(const Matrix *A)
+{
+    int j, k, l, rel;
+
+    if (A->m != A->n)
+    {
+        return false;
+    }
+
+    for (k = 0; k < A->m; ++k)
+    {
+        for (j = A->p[k].start; j < A->p[k].end; ++j)
+        {
+            l = A->i[j];
+
+            if (l == k)
+            {
+                continue;
+            }
+
+            rel = sorted_find(A->i + A->p[l].start, A->p[l].end - A->p[l].start, k);
+            if (rel == -1 || A->x[A->p[l].start + rel] != A->x[j])
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 bool matrix_valid_csr_input(const int *Ai, const int *Ap, size_t n_rows,

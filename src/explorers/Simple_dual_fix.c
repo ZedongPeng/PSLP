@@ -34,6 +34,7 @@ static inline PresolveStatus _simple_dual_fix(Problem *prob, double ck, double l
                                               int col, iVec *cols_to_inf)
 {
     assert(!HAS_TAG(col_tag, C_TAG_INACTIVE));
+    assert(!col_in_P(prob->constraints->state, col));
 
     // --------------------------------------------------
     // see if we can fix the variable to its lower bound
@@ -109,7 +110,7 @@ static inline PresolveStatus _simple_dual_fix(Problem *prob, double ck, double l
 
 PresolveStatus simple_dual_fix(Problem *prob)
 {
-    assert(prob->constraints->state->empty_cols->len == 0);
+    assert(!has_removable_empty_cols(prob->constraints->state));
     DEBUG(verify_problem_up_to_date(prob->constraints));
 
     Constraints *constraints = prob->constraints;
@@ -128,6 +129,11 @@ PresolveStatus simple_dual_fix(Problem *prob)
         // of candidate columns to process
         if (HAS_TAG(col_tags[k], C_TAG_INACTIVE) ||
             (locks[k].up > 0 && locks[k].down > 0))
+        {
+            continue;
+        }
+
+        if (col_in_P(constraints->state, (int) k))
         {
             continue;
         }

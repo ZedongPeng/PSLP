@@ -694,7 +694,7 @@ static PresolveStatus remove_dton_eq_rows__(Problem *prob, int max_shift_per_row
         //  substitute variable in objective and mark the eliminated row as
         //  inactive (ck is needed for the postsolve)
         double ck = prob->obj->c[k];
-        sub_var_in_obj_dton(prob->obj, j, k, aik, aij, *row.rhs);
+        sub_var_in_obj_dton(prob, j, k, aik, aij, *row.rhs);
         RESET_TAG(*row.tag, R_TAG_INACTIVE);
         *row.len = SIZE_INACTIVE_ROW;
         row.range->end = row.range->start;
@@ -726,7 +726,8 @@ PresolveStatus remove_dton_eq_rows(Problem *prob, int max_shift_per_row)
 {
     assert(prob->constraints->state->ston_rows->len == 0);
     assert(prob->constraints->state->empty_rows->len == 0);
-    assert(prob->constraints->state->empty_cols->len == 0);
+    assert(!has_removable_empty_cols(prob->constraints->state));
+    assert(prob->obj->P->nnz == 0); // not supported for QPs yet
     DEBUG(verify_problem_up_to_date(prob->constraints));
 
     // important to have double ptr in case of realloc when appending

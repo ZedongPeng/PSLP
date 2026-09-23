@@ -53,8 +53,29 @@ int main()
               << presolver->stats->nnz_original - presolver->stats->nnz_reduced
               << " non-zeros during presolving." << std::endl;
 
-    free_settings(stgs);
     free_presolver(presolver);
+
+    // the same LP plus a diagonal quadratic term on x1
+    double Px[] = {2.0};
+    int Pi[] = {1};
+    int Pp[33] = {0};
+    for (int i = 2; i < 33; ++i)
+    {
+        Pp[i] = 1;
+    }
+    stgs->dton_eq = false; // not supported for QPs yet
+    Presolver *presolver_qp = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                            lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    assert(presolver_qp != nullptr && "QP presolver initialization failed");
+    status = run_presolver(presolver_qp);
+    std::cout << "QP: removed "
+              << presolver_qp->stats->nnz_original -
+                     presolver_qp->stats->nnz_reduced
+              << " non-zeros, P has " << presolver_qp->reduced_prob->Pnnz
+              << " non-zeros after presolving." << std::endl;
+    free_presolver(presolver_qp);
+
+    free_settings(stgs);
 
     std::cout << "Presolver ran succesfully in C++ build" << std::endl;
     return 0;

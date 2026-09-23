@@ -4,6 +4,7 @@
 #include "test_Parallel_cols.h"
 #include "test_Parallel_rows.h"
 #include "test_Presolver.h"
+#include "test_QP.h"
 #include "test_SimpleReductions.h"
 #include "test_domain_propagation.h"
 #include "test_dton.h"
@@ -40,6 +41,7 @@ const char *run_all_tests()
     mu_assert("postsolve error", test_postsolve());
     mu_assert("ray postsolve error", test_ray_postsolve());
     mu_assert("map to reduced error", test_map_to_reduced());
+    mu_assert("QP error", test_qp());
 
     return NULL;
 }

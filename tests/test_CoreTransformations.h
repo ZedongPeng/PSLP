@@ -152,19 +152,32 @@ static char *test_3_core()
 // substituting x_subst = (rhs - aij x_stay) / aik in the objective
 static char *test_4_core()
 {
-    double *c = (double *) malloc(2 * sizeof(double));
-    c[0] = 1;
-    c[1] = 2;
-    Objective *obj = objective_new(c);
+    // the doubleton equality row 4 x0 + 2 x1 = 6 of an LP (P = 0)
+    double Ax[] = {4, 2};
+    int Ai[] = {0, 1};
+    int Ap[] = {0, 2};
+    double lhs[] = {6};
+    double rhs[] = {6};
+    double lbs[] = {0, 0};
+    double ubs[] = {10, 10};
+    double c[] = {1, 2};
+
+    Settings *stgs = default_settings();
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c,
+                                         NULL, NULL, NULL, 0, stgs);
+    Objective *obj = presolver->prob->obj;
 
     // stay = 0, subst = 1, aik = 2, aij = 4, rhs = 6:
     // c[0] -= (4 / 2) * 2 = 4, offset += (6 / 2) * 2 = 6
-    sub_var_in_obj_dton(obj, 0, 1, 2.0, 4.0, 6.0);
+    sub_var_in_obj_dton(presolver->prob, 0, 1, 2.0, 4.0, 6.0);
     mu_assert("error c", obj->c[0] == -3.0);
     mu_assert("error c", obj->c[1] == 2.0);
     mu_assert("error offset", obj->offset == 6.0);
+    mu_assert("error P row", presolver->prob->constraints->state->P_row_sizes[1] ==
+                                 SIZE_INACTIVE_COL);
 
-    free_objective(obj);
+    PS_FREE(stgs);
+    free_presolver(presolver);
 
     return 0;
 }
