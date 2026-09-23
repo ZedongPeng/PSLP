@@ -25,9 +25,10 @@ struct Constraints;
 struct Matrix;
 
 /* Objective (1/2) x'Px + c'x + offset. P is the full symmetric matrix in
-   CSR without extra row space and is never modified during presolve (see
-   col_in_P); problem_clean drops the rows of removed variables. For an LP,
-   P has no entries. */
+   CSR without extra row space. Fixing a variable removes its row and column
+   (fix_var_in_obj); no reduction creates fill-in in P (see col_in_P).
+   problem_clean drops the rows of removed variables. For an LP, P has no
+   entries. */
 typedef struct
 {
     double *c;
@@ -55,8 +56,10 @@ void problem_clean(Problem *problem);
 Objective *objective_new(double *c, struct Matrix *P);
 void free_objective(Objective *obj);
 
-/* Adds c[col] * value to the offset when variable 'col' is fixed to 'value'
-   and marks row 'col' of P (which must be empty) as inactive. */
+/* Fixes variable k = 'col' to 'value' in the objective:
+     offset += c_k value + (1/2) P_kk value^2,   c_l += P_kl value (l != k),
+   then removes row and column k of P and marks the row inactive. The caller
+   saves the postsolve record first since it needs c_k and row k of P. */
 void fix_var_in_obj(Problem *prob, int col, double value);
 
 /* Substitutes variable 'k' from the objective using row 'i'

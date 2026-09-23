@@ -605,7 +605,8 @@ PresolveStatus remove_empty_cols(Problem *prob)
         // store postsolve information (for empty cols we want zk = ck)
         // passing NULL ptrs are safe since the length is 0. As in fix_col,
         // the record is saved before the objective is updated.
-        save_retrieval_fixed_col(postsolve_info, k, val, c[k], NULL, NULL, 0);
+        save_retrieval_fixed_col(postsolve_info, k, val, c[k], NULL, NULL, 0, NULL,
+                                 NULL, 0);
         fix_var_in_obj(prob, k, val);
     }
 
@@ -714,8 +715,7 @@ PresolveStatus remove_variables_with_close_bounds(Problem *prob)
         // Empty columns are fixed by remove_empty_cols (fix_col requires a
         // non-empty column); fixing them here as well would add their
         // objective contribution to the offset twice.
-        if (col_sizes[ii] > 0 && !col_in_P(constraints->state, (int) ii) &&
-            IS_EQUAL_FEAS_TOL(bounds[ii].lb, bounds[ii].ub))
+        if (col_sizes[ii] > 0 && IS_EQUAL_FEAS_TOL(bounds[ii].lb, bounds[ii].ub))
         {
             // no need to check return value since bounds are equal
             fix_col(prob, (int) ii, bounds[ii].lb);

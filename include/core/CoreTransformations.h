@@ -39,11 +39,11 @@ struct Bound;
 
 /* Checks if fixing a column to 'val' is feasible with respect to its bounds.
    If not, it returns INFEASIBLE without modifying anything. Otherwise it tags
-   the column as fixed, stores the postsolve record, adds c[col] * val to the
-   objective offset, sets both lb and ub to val, and updates the activities.
-   The postsolve record and the objective update use the same value of c[col],
-   and the objective update is the last thing that reads it. The column must
-   be non-empty and must not appear in P (both asserted). */
+   the column as fixed, stores the postsolve record, updates the objective
+   (fix_var_in_obj), sets both lb and ub to val, and updates the activities.
+   The record is saved before the objective update, which is the last reader
+   of c[col] and row col of P. The column must be non-empty (asserted); empty
+   columns are fixed by remove_empty_cols. */
 PresolveStatus fix_col(struct Problem *prob, int col, double val);
 
 /* Fixes a variable to infinity and marks the constraints it appears in as

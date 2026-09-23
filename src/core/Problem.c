@@ -21,6 +21,7 @@
 #include "Matrix.h"
 #include "Memory_wrapper.h"
 #include "Numerics.h"
+#include "RowColViews.h"
 #include "State.h"
 #include "Workspace.h"
 #include "glbopts.h"
@@ -98,8 +99,45 @@ void mark_P_row_inactive(Problem *prob, int k)
 
 void fix_var_in_obj(Problem *prob, int col, double value)
 {
-    prob->obj->offset += prob->obj->c[col] * value;
-    mark_P_row_inactive(prob, col);
+    Objective *obj = prob->obj;
+    Matrix *P = obj->P;
+    int *P_row_sizes = prob->constraints->state->P_row_sizes;
+    int start = P->p[col].start;
+    int end = P->p[col].end;
+    assert(P_row_sizes[col] == end - start);
+
+    obj->offset += obj->c[col] * value;
+
+    for (int j = start; j < end; ++j)
+    {
+        int l = P->i[j];
+        double Pkl = P->x[j];
+
+        if (l == col)
+        {
+            obj->offset += 0.5 * Pkl * value * value;
+            continue;
+        }
+
+        // same cancellation rule as sub_var_in_obj
+        double upd = Pkl * value;
+        double new_c = obj->c[l] + upd;
+        if (ABS(new_c) <= CANCEL_TOL_REL * MAX(ABS(obj->c[l]), ABS(upd)))
+        {
+            new_c = 0.0;
+        }
+        obj->c[l] = new_c;
+
+        // P is symmetric, so P_lk exists in row l
+        RowView row_l = new_rowview(P->x + P->p[l].start, P->i + P->p[l].start,
+                                    P_row_sizes + l, P->p + l, NULL, NULL, NULL, l);
+        remove_coeff(&row_l, col);
+        P->nnz -= 1;
+    }
+
+    P->nnz -= (size_t) (end - start);
+    P->p[col].end = start;
+    P_row_sizes[col] = SIZE_INACTIVE_COL;
 }
 
 void problem_clean(Problem *prob)

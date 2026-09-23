@@ -110,19 +110,26 @@ static inline void copy_reduced_sol_to_orginal(Solution *sol, const double *x,
     }
 }
 
-// fixes xk and recovers zk = ck - ak^T y
-static void retrieve_fix_col(Solution *sol, int col, double val, double ck,
-                             const double *ak_vals, const int *ak_rows, int len)
+// fixes xk and recovers zk = ck + sum_l Pkl xl - ak^T y. Every column in the
+// saved P row was active when xk was fixed, so it has been recovered by now.
+static void retrieve_fix_col(Solution *sol, const FixedColRecord *r)
 {
+    int col = r->col;
     assert(sol->x[col] == COL_NOT_RETRIEVED);
     assert(sol->z[col] == COL_NOT_RETRIEVED);
 
-    sol->x[col] = val;
-    sol->z[col] = ck;
-    for (int i = 0; i < len; ++i)
+    sol->x[col] = r->val;
+    sol->z[col] = r->ck;
+    for (int i = 0; i < r->P_len; ++i)
     {
-        assert(sol->y[ak_rows[i]] != ROW_NOT_RETRIEVED);
-        sol->z[col] -= ak_vals[i] * sol->y[ak_rows[i]];
+        assert(sol->x[r->P_cols[i]] != COL_NOT_RETRIEVED);
+        sol->z[col] += r->P_vals[i] * sol->x[r->P_cols[i]];
+    }
+
+    for (int i = 0; i < r->len; ++i)
+    {
+        assert(sol->y[r->rows[i]] != ROW_NOT_RETRIEVED);
+        sol->z[col] -= r->vals[i] * sol->y[r->rows[i]];
     }
 }
 
@@ -482,7 +489,7 @@ void postsolver_run(const PostsolveInfo *info, Solution *sol, const double *x,
         if (type == FIXED_COL)
         {
             FixedColRecord r = decode_fixed_col(indices + start, vals + start, len);
-            retrieve_fix_col(sol, r.col, r.val, r.ck, r.vals, r.rows, r.len);
+            retrieve_fix_col(sol, &r);
         }
         else if (type == SUB_COL)
         {
@@ -538,7 +545,7 @@ void postsolver_run(const PostsolveInfo *info, Solution *sol, const double *x,
                 {
                     FixedColRecord r =
                         decode_fixed_col(indices + start, vals + start, len);
-                    retrieve_fix_col(sol, r.col, r.val, r.ck, r.vals, r.rows, r.len);
+                    retrieve_fix_col(sol, &r);
                     assert(reductions[j - 1] == BOUND_CHANGE_NO_ROW);
                 }
                 else
@@ -616,18 +623,19 @@ void postsolver_run(const PostsolveInfo *info, Solution *sol, const double *x,
 #endif
 }
 
-// here we should probably store information so zk = ck - ak^T y
-// so must save rows and vals
 void save_retrieval_fixed_col(PostsolveInfo *info, int col, double val, double ck,
-                              const double *vals, const int *rows, size_t len)
+                              const double *vals, const int *rows, size_t len,
+                              const double *Pvals, const int *Pcols, size_t P_len)
 {
     u16Vec_append(info->type, FIXED_COL);
     iVec_append(info->indices, col);
-    iVec_append(info->indices, DUMMY_VALUE);
+    iVec_append(info->indices, (int) P_len);
     iVec_append_array(info->indices, rows, len);
+    iVec_append_array(info->indices, Pcols, P_len);
     dVec_append(info->vals, val);
     dVec_append(info->vals, ck);
     dVec_append_array(info->vals, vals, len);
+    dVec_append_array(info->vals, Pvals, P_len);
     iVec_append(info->starts, (int) info->indices->len);
     assert(info->starts->len == info->type->len + 1);
     assert(info->vals->len == info->indices->len);
