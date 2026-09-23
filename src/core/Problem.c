@@ -23,6 +23,7 @@
 #include "Numerics.h"
 #include "State.h"
 #include "Workspace.h"
+#include "glbopts.h"
 #include "utils.h"
 
 Problem *new_problem(Constraints *constraints, Objective *obj)
@@ -49,6 +50,7 @@ void free_problem(Problem *problem)
         PS_FREE(data->activities);
         PS_FREE(data->row_sizes);
         PS_FREE(data->col_sizes);
+        PS_FREE(data->P_row_sizes);
         free_state(data);
     }
 
@@ -57,12 +59,13 @@ void free_problem(Problem *problem)
     PS_FREE(problem);
 }
 
-Objective *objective_new(double *c)
+Objective *objective_new(double *c, Matrix *P)
 {
     Objective *obj = (Objective *) ps_malloc(1, sizeof(Objective));
     RETURN_PTR_IF_NULL(obj, NULL);
     obj->c = c;
     obj->offset = 0.0;
+    obj->P = P;
 
     return obj;
 }
@@ -71,17 +74,32 @@ void free_objective(Objective *obj)
 {
     RETURN_IF_NULL(obj);
     PS_FREE(obj->c);
+    free_matrix(obj->P);
     PS_FREE(obj);
 }
 
-static void objective_shrink(double *c, int *map, size_t len)
+static void objective_clean(Objective *obj, const int *P_row_sizes,
+                            const int *col_map, size_t n_cols_old, size_t n_cols_new)
 {
-    dPtr_shrink(c, map, len);
+    dPtr_shrink(obj->c, col_map, n_cols_old);
+
+    /* drops the rows with size SIZE_INACTIVE_COL (== SIZE_INACTIVE_ROW) and
+       renumbers the columns */
+    remove_extra_space(obj->P, P_row_sizes, col_map, n_cols_new);
 }
 
-void fix_var_in_obj(Objective *obj, int col, double value)
+void mark_P_row_inactive(Problem *prob, int k)
 {
-    obj->offset += obj->c[col] * value;
+    int *P_row_sizes = prob->constraints->state->P_row_sizes;
+    assert(P_row_sizes[k] == 0);
+    assert(prob->obj->P->p[k].start == prob->obj->P->p[k].end);
+    P_row_sizes[k] = SIZE_INACTIVE_COL;
+}
+
+void fix_var_in_obj(Problem *prob, int col, double value)
+{
+    prob->obj->offset += prob->obj->c[col] * value;
+    mark_P_row_inactive(prob, col);
 }
 
 void problem_clean(Problem *prob)
@@ -90,13 +108,19 @@ void problem_clean(Problem *prob)
     size_t n_cols_old = prob->constraints->n;
     size_t n_rows_old = prob->constraints->m;
     constraints_clean(prob->constraints, maps);
+
+    /* before clean_state, which shrinks P_row_sizes */
+    objective_clean(prob->obj, prob->constraints->state->P_row_sizes, maps->cols,
+                    n_cols_old, prob->constraints->n);
     clean_state(prob->constraints->state, maps, n_rows_old, n_cols_old);
-    objective_shrink(prob->obj->c, maps->cols, n_cols_old);
 }
 
-void sub_var_in_obj(Objective *obj, const double *vals, const int *cols, int len,
+void sub_var_in_obj(Problem *prob, const double *vals, const int *cols, int len,
                     int k, double aik, double rhs)
 {
+    Objective *obj = prob->obj;
+    mark_P_row_inactive(prob, k);
+
     if (obj->c[k] == 0.0)
     {
         return;
@@ -121,9 +145,12 @@ void sub_var_in_obj(Objective *obj, const double *vals, const int *cols, int len
     obj->offset += rhs * ratio;
 }
 
-void sub_var_in_obj_dton(Objective *obj, int stay, int subst, double aik, double aij,
+void sub_var_in_obj_dton(Problem *prob, int stay, int subst, double aik, double aij,
                          double rhs)
 {
+    Objective *obj = prob->obj;
+    mark_P_row_inactive(prob, subst);
+
     obj->c[stay] -= (aij / aik) * obj->c[subst];
     obj->offset += (rhs / aik) * obj->c[subst];
 }

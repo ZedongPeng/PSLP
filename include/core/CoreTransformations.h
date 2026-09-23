@@ -43,12 +43,12 @@ struct Bound;
    objective offset, sets both lb and ub to val, and updates the activities.
    The postsolve record and the objective update use the same value of c[col],
    and the objective update is the last thing that reads it. The column must
-   be non-empty; empty columns are fixed by remove_empty_cols. */
+   be non-empty and must not appear in P (both asserted). */
 PresolveStatus fix_col(struct Problem *prob, int col, double val);
 
 /* Fixes a variable to infinity and marks the constraints it appears in as
-   inactive. This is only valid for a variable with a zero objective
-   coefficient (asserted), so the objective is not modified. */
+   inactive. Only valid for a variable with a zero objective coefficient that
+   does not appear in P (both asserted). */
 void fix_col_to_negative_inf(struct Problem *prob, int col);
 void fix_col_to_positive_inf(struct Problem *prob, int col);
 

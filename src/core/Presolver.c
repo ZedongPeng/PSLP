@@ -171,9 +171,9 @@ void set_settings_false(Settings *stgs)
 
 typedef struct clean_up_scope
 {
-    Matrix *A, *AT;
+    Matrix *A, *AT, *P;
     double *lhs_copy, *rhs_copy, *c_copy;
-    int *row_sizes, *col_sizes;
+    int *row_sizes, *col_sizes, *P_row_sizes;
     RowTag *row_tags;
     Lock *locks;
     Activity *activities;
@@ -190,11 +190,13 @@ void presolver_clean_up(clean_up_scope scope)
 {
     free_matrix(scope.A);
     free_matrix(scope.AT);
+    free_matrix(scope.P);
     PS_FREE(scope.lhs_copy);
     PS_FREE(scope.rhs_copy);
     PS_FREE(scope.c_copy);
     PS_FREE(scope.row_sizes);
     PS_FREE(scope.col_sizes);
+    PS_FREE(scope.P_row_sizes);
     PS_FREE(scope.row_tags);
     PS_FREE(scope.col_tags);
     PS_FREE(scope.bounds);
@@ -215,25 +217,28 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
 {
     /* the row pointers of the internal matrices are ints, so a valid CSR
        input has at most INT_MAX non-zeros */
-    if (nnz > (size_t) INT_MAX)
+    if (nnz > (size_t) INT_MAX || Pnnz > (size_t) INT_MAX)
     {
         return NULL;
     }
 
-    /* a quadratic objective term is not supported yet */
-    (void) Px;
-    (void) Pi;
-    (void) Pp;
-    if (Pnnz > 0)
+    if (Pnnz > 0 && (Px == NULL || Pi == NULL || Pp == NULL ||
+                     !matrix_valid_csr_input(Pi, Pp, n, n, Pnnz)))
+    {
+        return NULL;
+    }
+
+    /* doubleton equality rows are not supported for QPs yet */
+    if (Pnnz > 0 && stgs->dton_eq)
     {
         return NULL;
     }
 
     Timer timer;
     clock_gettime(CLOCK_MONOTONIC, &timer.start);
-    Matrix *A = NULL, *AT = NULL;
+    Matrix *A = NULL, *AT = NULL, *P = NULL;
     double *lhs_copy = NULL, *rhs_copy = NULL, *c_copy = NULL;
-    int *row_sizes = NULL, *col_sizes = NULL;
+    int *row_sizes = NULL, *col_sizes = NULL, *P_row_sizes = NULL;
     RowTag *row_tags = NULL;
     Lock *locks = NULL;
     Activity *activities = NULL;
@@ -260,9 +265,10 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
     work = new_work(n_rows, n_cols);
     row_sizes = (int *) ps_malloc(n_rows, sizeof(int));
     col_sizes = (int *) ps_malloc(n_cols, sizeof(int));
+    P_row_sizes = (int *) ps_malloc(n_cols, sizeof(int));
 
     if (!lhs_copy || !rhs_copy || !c_copy || !col_tags || !bounds || !work ||
-        !row_sizes || !col_sizes)
+        !row_sizes || !col_sizes || !P_row_sizes)
     {
         goto cleanup;
     }
@@ -270,6 +276,15 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
     memcpy(lhs_copy, lhs, n_rows * sizeof(double));
     memcpy(rhs_copy, rhs, n_rows * sizeof(double));
     memcpy(c_copy, c, n_cols * sizeof(double));
+
+    // ---------------------------------------------------------------------------
+    //  Build and validate P (empty for an LP)
+    // ---------------------------------------------------------------------------
+    P = matrix_new_no_extra_space(Px, Pi, Pnnz > 0 ? Pp : NULL, n_cols, n_cols,
+                                  Pnnz);
+    if (!P) goto cleanup;
+    if (!matrix_is_symmetric(P)) goto cleanup;
+    count_rows(P, P_row_sizes);
 
     // ---------------------------------------------------------------------------
     //  Build bounds, row tags, A and AT. We first build A, then in parallel
@@ -306,8 +321,8 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
     // ---------------------------------------------------------------------------
     //  Initialize internal data and constraints
     // ---------------------------------------------------------------------------
-    data = new_state(row_sizes, col_sizes, locks, n_rows, n_cols, activities, work,
-                     row_tags);
+    data = new_state(row_sizes, col_sizes, P_row_sizes, locks, n_rows, n_cols,
+                     activities, work, row_tags);
 
     if (!data) goto cleanup;
     constraints =
@@ -318,15 +333,16 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
     //             Allocate the actual presolver
     // ---------------------------------------------------------------------------
     presolver = (Presolver *) ps_malloc(1, sizeof(Presolver));
-    obj = objective_new(c_copy);
+    obj = objective_new(c_copy, P);
     if (!presolver || !obj) goto cleanup;
     presolver->stgs = stgs;
     presolver->prob = new_problem(constraints, obj);
     presolver->stats = init_stats(A->m, A->n, nnz);
     presolver->stats->nnz_removed_trivial = nnz - (size_t) A->nnz; /* explicit 0's */
+    presolver->stats->Pnnz_original = P->nnz; /* explicit 0's removed */
     presolver->reduced_prob =
         (PresolvedProblem *) ps_calloc(1, sizeof(PresolvedProblem));
-    DEBUG(run_debugger(constraints, false));
+    DEBUG(run_debugger_problem(presolver->prob, false));
 
     // ---------------------------------------------------------------------------
     //           Allocate space for returning the solution
@@ -350,10 +366,25 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
 
 cleanup:
 {
-    struct clean_up_scope scope = {
-        A,         AT,       lhs_copy, rhs_copy,   c_copy, row_sizes,
-        col_sizes, row_tags, locks,    activities, data,   constraints,
-        presolver, obj,      col_tags, bounds,     work};
+    struct clean_up_scope scope = {.A = A,
+                                   .AT = AT,
+                                   .P = P,
+                                   .lhs_copy = lhs_copy,
+                                   .rhs_copy = rhs_copy,
+                                   .c_copy = c_copy,
+                                   .row_sizes = row_sizes,
+                                   .col_sizes = col_sizes,
+                                   .P_row_sizes = P_row_sizes,
+                                   .row_tags = row_tags,
+                                   .locks = locks,
+                                   .activities = activities,
+                                   .data = data,
+                                   .constraints = constraints,
+                                   .presolver = presolver,
+                                   .obj = obj,
+                                   .col_tags = col_tags,
+                                   .bounds = bounds,
+                                   .work = work};
     presolver_clean_up(scope);
 }
     return NULL;
@@ -462,7 +493,7 @@ static inline PresolveStatus run_trivial_explorers(Problem *prob,
 
     assert(prob->constraints->state->ston_rows->len == 0);
     assert(prob->constraints->state->empty_rows->len == 0);
-    assert(prob->constraints->state->empty_cols->len == 0);
+    assert(!has_removable_empty_cols(prob->constraints->state));
     return UNCHANGED;
 }
 
@@ -475,7 +506,7 @@ static inline PresolveStatus run_fast_explorers(Problem *prob, const Settings *s
 {
     assert(prob->constraints->state->ston_rows->len == 0);
     assert(prob->constraints->state->empty_rows->len == 0);
-    assert(prob->constraints->state->empty_cols->len == 0);
+    assert(!has_removable_empty_cols(prob->constraints->state));
     PresolveStatus status = UNCHANGED;
     Timer timer;
 
@@ -513,7 +544,7 @@ run_medium_explorers(Problem *prob, const Settings *stgs, PresolveStats *stats)
 {
     assert(prob->constraints->state->ston_rows->len == 0);
     assert(prob->constraints->state->empty_rows->len == 0);
-    assert(prob->constraints->state->empty_cols->len == 0);
+    assert(!has_removable_empty_cols(prob->constraints->state));
     DEBUG(verify_no_duplicates_sort(prob->constraints->state->updated_activities));
     size_t nnz_before;
     size_t *nnz = &prob->constraints->A->nnz;
@@ -567,7 +598,7 @@ run_medium_explorers(Problem *prob, const Settings *stgs, PresolveStats *stats)
         clock_gettime(CLOCK_MONOTONIC, &timer.end);
         stats->time_parallel_cols += GET_ELAPSED_SECONDS(timer);
         assert(prob->constraints->state->empty_rows->len == 0);
-        assert(prob->constraints->state->empty_cols->len == 0);
+        assert(!has_removable_empty_cols(prob->constraints->state));
         status |= run_trivial_explorers(prob, stgs);
         assert(prob->constraints->state->ston_rows->len == 0);
         assert(!(status & REDUCED));
@@ -608,21 +639,33 @@ void populate_presolved_problem(Presolver *presolver)
     {
         reduced_prob->Ap[i] = A->p[i].start;
     }
+
+    const Matrix *P = presolver->prob->obj->P;
+    assert(P->m == A->n && P->n == A->n);
+    reduced_prob->Px = P->x;
+    reduced_prob->Pi = P->i;
+    reduced_prob->Pnnz = P->nnz;
+    reduced_prob->Pp = (int *) malloc((P->m + 1) * sizeof(int));
+    for (int i = 0; i < P->m + 1; i++)
+    {
+        reduced_prob->Pp[i] = P->p[i].start;
+    }
 }
 
 static inline void print_start_message(const PresolveStats *stats)
 {
-    printf("\n\t       PSLP v%s - LP presolver \n\t(c) Daniel "
+    printf("\n\t       PSLP v%s - LP/QP presolver \n\t(c) Daniel "
            "Cederberg, Stanford University, 2025\n",
            PSLP_VERSION);
-    printf("Original problem:  %zu rows, %zu columns, %zu nnz\n",
-           stats->n_rows_original, stats->n_cols_original, stats->nnz_original);
+    printf("Original problem:  %zu rows, %zu columns, %zu nnz, %zu nnz in P\n",
+           stats->n_rows_original, stats->n_cols_original, stats->nnz_original,
+           stats->Pnnz_original);
 }
 
 static inline void print_end_message(const Matrix *A, const PresolveStats *stats)
 {
-    printf("Presolved problem: %zu rows, %zu columns, %zu nnz\n", A->m, A->n,
-           A->nnz);
+    printf("Presolved problem: %zu rows, %zu columns, %zu nnz, %zu nnz in P\n", A->m,
+           A->n, A->nnz, stats->Pnnz_reduced);
     printf("PSLP init & run time : %.3f seconds, %.3f \n", stats->time_init,
            stats->time_presolve);
 }
@@ -678,7 +721,7 @@ PresolveStatus run_presolver(Presolver *presolver)
         print_start_message(stats);
     }
 
-    DEBUG(run_debugger(prob->constraints, false));
+    DEBUG(run_debugger_problem(prob, false));
 
     // ------------------------------------------------------------------------
     // Main loop for the presolver. The logic is organized into phases and
@@ -701,7 +744,7 @@ PresolveStatus run_presolver(Presolver *presolver)
         }
 
         stats->nnz_removed_trivial += nnz_before_reduction - A->nnz;
-        DEBUG(run_debugger(prob->constraints, false));
+        DEBUG(run_debugger_problem(prob, false));
         nnz_before_phase = A->nnz;
 
         // apply presolvers belonging to a certain complexity class
@@ -751,10 +794,11 @@ PresolveStatus run_presolver(Presolver *presolver)
     }
 
     problem_clean(prob);
-    DEBUG(run_debugger(prob->constraints, true));
+    DEBUG(run_debugger_problem(prob, true));
     stats->n_rows_reduced = A->m;
     stats->n_cols_reduced = A->n;
     stats->nnz_reduced = A->nnz;
+    stats->Pnnz_reduced = prob->obj->P->nnz;
     DEBUG(run_debugger_stats_consistency_check(stats));
     populate_presolved_problem(presolver);
 
@@ -805,6 +849,8 @@ void free_presolver_reduced_problem(Presolver *presolver)
         if (prob->obj)
         {
             PS_FREE(prob->obj->c);
+            free_matrix(prob->obj->P);
+            prob->obj->P = NULL;
         }
     }
 
@@ -813,7 +859,10 @@ void free_presolver_reduced_problem(Presolver *presolver)
     reduced_prob->lhs = NULL;
     reduced_prob->rhs = NULL;
     reduced_prob->c = NULL;
+    reduced_prob->Px = NULL;
+    reduced_prob->Pi = NULL;
     PS_FREE(reduced_prob->Ap);
+    PS_FREE(reduced_prob->Pp);
     PS_FREE(reduced_prob->lbs);
     PS_FREE(reduced_prob->ubs);
 }
@@ -940,6 +989,7 @@ void free_presolver(Presolver *presolver)
     if (presolver->reduced_prob)
     {
         PS_FREE(presolver->reduced_prob->Ap);
+        PS_FREE(presolver->reduced_prob->Pp);
         PS_FREE(presolver->reduced_prob->lbs);
         PS_FREE(presolver->reduced_prob->ubs);
         PS_FREE(presolver->reduced_prob);

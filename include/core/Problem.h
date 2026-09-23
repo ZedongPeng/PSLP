@@ -20,12 +20,19 @@
 #define CORE_PROBLEM_H
 
 #include <stdbool.h>
+#include <stddef.h>
 struct Constraints;
+struct Matrix;
 
+/* Objective (1/2) x'Px + c'x + offset. P is the full symmetric matrix in
+   CSR without extra row space and is never modified during presolve (see
+   col_in_P); problem_clean drops the rows of removed variables. For an LP,
+   P has no entries. */
 typedef struct
 {
     double *c;
     double offset;
+    struct Matrix *P;
 } Objective;
 
 typedef struct Problem
@@ -44,25 +51,28 @@ void free_problem(Problem *problem);
    account. */
 void problem_clean(Problem *problem);
 
-/* Constructor and destructor */
-Objective *objective_new(double *c);
+/* Constructor and destructor. The objective takes ownership of c and P. */
+Objective *objective_new(double *c, struct Matrix *P);
 void free_objective(Objective *obj);
 
-/* Adds c[col] * value to the offset when variable 'col' is fixed to 'value'.
-   Called at fix time by fix_col and remove_empty_cols; the flush of fixed
-   columns (delete_fixed_cols_from_problem) does not touch the objective. */
-void fix_var_in_obj(Objective *obj, int col, double value);
+/* Adds c[col] * value to the offset when variable 'col' is fixed to 'value'
+   and marks row 'col' of P (which must be empty) as inactive. */
+void fix_var_in_obj(Problem *prob, int col, double value);
 
 /* Substitutes variable 'k' from the objective using row 'i'
    (assumed to be an equality). Row 'i' is specified by
-   (vals, cols, len, rhs) */
-void sub_var_in_obj(Objective *obj, const double *vals, const int *cols, int len,
+   (vals, cols, len, rhs). Row k of P must be empty and is marked inactive. */
+void sub_var_in_obj(Problem *prob, const double *vals, const int *cols, int len,
                     int k, double aik, double rhs);
 
+/* Marks row k of P (which must be empty) as removed. */
+void mark_P_row_inactive(Problem *prob, int k);
+
 /* Substitutes variable 'subst' from the objective using the doubleton
-   equality row aij * x_stay + aik * x_subst = rhs. c[subst] is left
-   unchanged; the caller stores it for the postsolve. */
-void sub_var_in_obj_dton(Objective *obj, int stay, int subst, double aik, double aij,
+   equality row aij * x_stay + aik * x_subst = rhs. Row subst of P must be
+   empty and is marked inactive. c[subst] is left unchanged; the caller
+   stores it for the postsolve. */
+void sub_var_in_obj_dton(Problem *prob, int stay, int subst, double aik, double aij,
                          double rhs);
 
 #endif // CORE_PROBLEM_H

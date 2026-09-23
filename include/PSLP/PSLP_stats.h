@@ -36,6 +36,10 @@ extern "C"
         size_t n_cols_reduced;
         size_t nnz_reduced;
 
+        /* non-zeros of the quadratic objective matrix P (0 for an LP) */
+        size_t Pnnz_original;
+        size_t Pnnz_reduced;
+
         /* reduction stats */
         size_t nnz_removed_trivial;
         size_t nnz_removed_fast;

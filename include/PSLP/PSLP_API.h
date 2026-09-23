@@ -18,7 +18,16 @@
 
 /* Public header containing the outward facing API. Together with the other
    files in the folder "PSLP", it includes the input/output data structs
-   and the API functions. */
+   and the API functions.
+
+   The presolver handles problems of the form
+
+       minimize    (1/2) x'Px + c'x
+       subject to  lhs <= Ax <= rhs
+                   lbs <= x <= ubs
+
+   with P symmetric positive semidefinite. An LP is the special case P = 0
+   (see new_presolver). */
 #ifndef PRESOLVER_H
 #define PRESOLVER_H
 
@@ -75,6 +84,13 @@ extern "C"
         double *lbs;
         double *ubs;
 
+        /* CSR format of the reduced quadratic objective matrix P (n x n,
+           full symmetric matrix, Pnnz non-zeros). Pnnz is 0 for an LP. */
+        double *Px;
+        int *Pi;
+        int *Pp;
+        size_t Pnnz;
+
         /* offset to be added to the objective value. (When the presolver fixes
            variables, it adds an offset to the objective. This offset should
            possibly be taken into account on the solver side when evaluating the
@@ -116,8 +132,14 @@ extern "C"
 
        (Px, Pi, Pp, Pnnz) is the n x n matrix P of the quadratic objective term
        (1/2) x'Px in CSR form, given as the full symmetric matrix (both
-       triangles). Pp == NULL or Pnnz == 0 means P = 0, i.e. an LP. A non-empty
-       P is not supported yet and makes the function return NULL. */
+       triangles) with sorted column indices. Pp == NULL or Pnnz == 0 means
+       P = 0, i.e. an LP. The presolver keeps a deep copy and drops explicit
+       zeros. The function returns NULL if Pnnz > 0 with a NULL array,
+       Pnnz > INT_MAX, the CSR structure is invalid (see
+       matrix_valid_csr_input) or P is not exactly symmetric, and if
+       stgs->dton_eq is set with a non-empty P (doubleton equality rows are
+       not supported for QPs yet). Positive semidefiniteness is not
+       checked. */
     Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap,
                              size_t m, size_t n, size_t nnz, const double *lhs,
                              const double *rhs, const double *lbs, const double *ubs,
@@ -140,14 +162,14 @@ extern "C"
     void free_presolver_reduced_problem(Presolver *presolver);
 
     /* Postsolve the problem given the primal-dual solution (x, y, z) of the
-       reduced problem, where z = c - A'y are the multipliers of the variable
-       bounds: z >= 0 for a variable at its lower bound, z <= 0 at its upper
-       bound, y >= 0 for a row active at its lhs and y <= 0 at its rhs. The
-       function populates presolver->sol, so if you're looking for the
-       solution to the original problem, you want to look there. If the
-       solver has added the offset to the objective when solving the reduced
-       problem, the optimal value of the original problem is the same as that
-       of the reduced problem. */
+       reduced problem, where z = Px + c - A'y are the multipliers of the
+       variable bounds (z = c - A'y for an LP): z >= 0 for a variable at its
+       lower bound, z <= 0 at its upper bound, y >= 0 for a row active at its
+       lhs and y <= 0 at its rhs. The function populates presolver->sol, so if
+       you're looking for the solution to the original problem, you want to
+       look there. If the solver has added the offset to the objective when
+       solving the reduced problem, the optimal value of the original problem
+       is the same as that of the reduced problem. */
     void postsolve(Presolver *presolver, const double *x, const double *y,
                    const double *z);
 
@@ -182,7 +204,13 @@ extern "C"
        The function writes the corresponding ray for the original problem
        to x_orig. It does not check whether x is a valid ray.
 
-       x is an unbounded direction with c'x < 0; no sign convention involved. */
+       x is an unbounded direction: a recession direction of the constraint
+       set with Px = 0 and c'x < 0 (for an LP simply c'x < 0); no sign
+       convention involved. The recovered ray satisfies the same conditions
+       for the original problem: fixed variables get a zero component, a
+       substitution is a linear change of variables that preserves c'd, and
+       variables that appear in P are never removed by the presolver, so
+       P d is unchanged. */
     void postsolve_dual_infeas_ray(Presolver *presolver, const double *x,
                                    double *x_orig);
 

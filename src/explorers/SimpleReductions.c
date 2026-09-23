@@ -147,9 +147,10 @@ static inline PresolveStatus remove_stonrow(Problem *prob, int row)
     assert(!HAS_TAG(col_tag, C_TAG_INACTIVE));
 
     // ----------------------------------------------------------------------
-    //        if the row is an equality, we fix the variable
+    //  if the row is an equality, we fix the variable (unless it appears in
+    //  P: then the branch below tightens both bounds and the column stays)
     // ----------------------------------------------------------------------
-    if (HAS_TAG(*row_tag, R_TAG_EQ))
+    if (HAS_TAG(*row_tag, R_TAG_EQ) && !col_in_P(constrs->state, k))
     {
         assert(lhs == rhs);
 
@@ -529,6 +530,8 @@ PresolveStatus remove_empty_cols(Problem *prob)
     ColTag *col_tags = prob->constraints->col_tags;
     Bound *bounds = prob->constraints->bounds;
     const double *c = prob->obj->c;
+    const State *state = prob->constraints->state;
+    size_t n_kept = 0;
 
     for (size_t i = 0; i < len; ++i)
     {
@@ -540,6 +543,12 @@ PresolveStatus remove_empty_cols(Problem *prob)
         }
 
         assert(col_sizes[k] == 0 && !HAS_TAG(col_tags[k], C_TAG_INACTIVE));
+
+        if (col_in_P(state, k))
+        {
+            empty_cols->data[n_kept++] = k;
+            continue;
+        }
 
         // --------------------------------------------------------------------
         // if the objective coefficient is 0 we set the variable to 0 if
@@ -597,10 +606,10 @@ PresolveStatus remove_empty_cols(Problem *prob)
         // passing NULL ptrs are safe since the length is 0. As in fix_col,
         // the record is saved before the objective is updated.
         save_retrieval_fixed_col(postsolve_info, k, val, c[k], NULL, NULL, 0);
-        fix_var_in_obj(prob->obj, k, val);
+        fix_var_in_obj(prob, k, val);
     }
 
-    iVec_clear_no_resize(empty_cols);
+    empty_cols->len = n_kept;
     return UNCHANGED;
 }
 
@@ -705,7 +714,8 @@ PresolveStatus remove_variables_with_close_bounds(Problem *prob)
         // Empty columns are fixed by remove_empty_cols (fix_col requires a
         // non-empty column); fixing them here as well would add their
         // objective contribution to the offset twice.
-        if (col_sizes[ii] > 0 && IS_EQUAL_FEAS_TOL(bounds[ii].lb, bounds[ii].ub))
+        if (col_sizes[ii] > 0 && !col_in_P(constraints->state, (int) ii) &&
+            IS_EQUAL_FEAS_TOL(bounds[ii].lb, bounds[ii].ub))
         {
             // no need to check return value since bounds are equal
             fix_col(prob, (int) ii, bounds[ii].lb);
