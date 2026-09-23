@@ -71,8 +71,11 @@ static inline bool col_in_P(const State *data, int k)
     return data->P_row_sizes[k] != 0;
 }
 
-/* True if empty_cols holds a column with an empty P row (columns in P are
-   kept in the worklist). */
+/* True if empty_cols holds a column with an empty P row, which
+   remove_empty_cols always removes. A column with off-diagonal entries in P
+   is kept in the worklist until its P row shrinks. (A column whose P row
+   shrank to a diagonal is also removed by the next remove_empty_cols call but
+   is not detected here, since the state does not see the values of P.) */
 static inline bool has_removable_empty_cols(const State *data)
 {
     for (size_t i = 0; i < data->empty_cols->len; ++i)

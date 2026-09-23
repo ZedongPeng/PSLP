@@ -30,8 +30,8 @@
            row/column of P
    Test 3: singleton equality row fixing a variable that appears in P
            (postsolve recovers y from the gradient)
-   Test 4: empty columns: fixed by the sign of c when absent from P, kept
-           when present in P
+   Test 4: empty columns: fixed by the sign of c when absent from P, at
+           clip(-c/Pkk) with only a diagonal, kept with off-diagonal entries
    Test 5: simple dual fix skips a variable that appears in P
    Test 7: parallel columns are not merged when one of them appears in P
    Test 8: dual infeasibility ray after fixing a variable that appears in P
@@ -39,6 +39,8 @@
    Test 15: two coupled variables fixed by two singleton equality rows, in
             both orders (the first multiplier needs the later-fixed neighbour)
    Test 16: primal infeasibility ray after fixing a variable that appears in P
+   Test 17: diagonal-only empty columns with infinite bounds: clipped to a
+            finite bound, inside with both bounds infinite, and c = 0
    (doubleton equality rows are not supported for QPs yet; new_presolver
    returns NULL if dton_eq is set)
 */
@@ -334,10 +336,10 @@ static char *test_3_qp()
          P = 2 I on (x0, x2, x3), plus P_22 = P_44 = 2, P_24 = P_42 = 1
     s.t. 2 x2 + x3 = 4, -1 <= x0 <= 1, 0 <= x1 <= 5, -10 <= x2, x3, x4 <= 10
     x0, x1 and x4 are empty in A. x1 is not in P and goes to its lower bound
-    (LP logic). x0 (diagonal only) and x4 (coupled to x2) appear in P and
-    are kept. Reduced (x0, x2, x3, x4):
-    min x0^2 - 4 x0 + x2^2 + x2 x4 + x4^2 + x3^2 s.t. 2 x2 + x3 = 4,
-    solution (1, 32/19, 12/19, -16/19) with y = 24 / 19 and z0 = -2. */
+    (LP logic). x0 has only a diagonal, so x0 = clip(-c0 / P00, -1, 1) = 1.
+    x4 is coupled to x2 and stays. Reduced (x2, x3, x4):
+    min x2^2 + x2 x4 + x4^2 + x3^2 - 3 s.t. 2 x2 + x3 = 4,
+    solution (32, 12, -16) / 19 with y = 24 / 19. */
 static char *test_4_qp()
 {
     double Ax[] = {2, 1};
@@ -361,31 +363,25 @@ static char *test_4_qp()
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
     PresolvedProblem *red = presolver->reduced_prob;
-    mu_assert("reduced dims", red->m == 1 && red->n == 4 && red->nnz == 2);
-    mu_assert("reduced offset", red->obj_offset == 0.0);
-    double c_correct[] = {-4, 0, 0, 0};
-    mu_assert("reduced c", ARRAYS_EQUAL_DOUBLE(c_correct, red->c, 4));
-    mu_assert("reduced P nnz", red->Pnnz == 6);
-    double Px_correct[] = {2, 2, 1, 2, 1, 2};
-    int Pi_correct[] = {0, 1, 3, 2, 1, 3};
-    int Pp_correct[] = {0, 1, 3, 4, 6};
-    mu_assert("reduced Px", ARRAYS_EQUAL_DOUBLE(Px_correct, red->Px, 6));
-    mu_assert("reduced Pi", ARRAYS_EQUAL_INT(Pi_correct, red->Pi, 6));
-    mu_assert("reduced Pp", ARRAYS_EQUAL_INT(Pp_correct, red->Pp, 5));
-    mu_assert("P unchanged",
-              presolver->stats->Pnnz_original == presolver->stats->Pnnz_reduced);
+    mu_assert("reduced dims", red->m == 1 && red->n == 3 && red->nnz == 2);
+    mu_assert("reduced offset", red->obj_offset == -3.0);
+    mu_assert("reduced P nnz", red->Pnnz == 5);
+    double Px_correct[] = {2, 1, 2, 1, 2};
+    int Pi_correct[] = {0, 2, 1, 0, 2};
+    int Pp_correct[] = {0, 2, 3, 5};
+    mu_assert("reduced Px", ARRAYS_EQUAL_DOUBLE(Px_correct, red->Px, 5));
+    mu_assert("reduced Pi", ARRAYS_EQUAL_INT(Pi_correct, red->Pi, 5));
+    mu_assert("reduced Pp", ARRAYS_EQUAL_INT(Pp_correct, red->Pp, 4));
 
-    // the kept columns (x0 and x4, now columns 0 and 3) are still listed as
-    // empty
+    // the kept column (x4, now column 2) is still listed as empty
     State *state = presolver->prob->constraints->state;
-    mu_assert("kept empty cols", state->empty_cols->len == 2 &&
-                                     state->empty_cols->data[0] == 0 &&
-                                     state->empty_cols->data[1] == 3 &&
-                                     !has_removable_empty_cols(state));
+    mu_assert("kept empty col", state->empty_cols->len == 1 &&
+                                    state->empty_cols->data[0] == 2 &&
+                                    !has_removable_empty_cols(state));
 
-    double x[] = {1, 32.0 / 19, 12.0 / 19, -16.0 / 19};
+    double x[] = {32.0 / 19, 12.0 / 19, -16.0 / 19};
     double y[] = {24.0 / 19};
-    double z[] = {-2, 0, 0, 0};
+    double z[] = {0, 0, 0};
     postsolve(presolver, x, y, z);
 
     double correct_x[] = {1, 0, 32.0 / 19, 12.0 / 19, -16.0 / 19};
@@ -633,8 +629,9 @@ static char *test_9_qp()
     recovered by the later FIXED_COL record.
     min. (1/2) x'Px + [1 -1 -4] x,  P = [2 1 0; 1 2 1; 0 1 2]
     s.t. x1 = 3, x0 = 2, x1 + x2 <= 10, 0 <= x <= 10
-    Reduced (x2): min x2^2 - x2 s.t. x2 <= 7 (the last row becomes a bound),
-    offset 18, solution x2 = 0.5.
+    After the fixes x2 is an empty column (the last row becomes a bound) with
+    only a diagonal in P, so it is fixed at -c2 / P22 = 0.5 and the reduced
+    problem is empty, offset 17.75.
     Original: x = (2, 3, 0.5), z = 0, y = (7.5, 8, 0) for the row order
     above and (8, 7.5, 0) with the two equality rows swapped. */
 static char *test_15_qp()
@@ -672,11 +669,10 @@ static char *test_15_qp()
         mu_assert("status", run_presolver(presolver) == REDUCED);
 
         PresolvedProblem *red = presolver->reduced_prob;
-        mu_assert("reduced dims", red->m == 0 && red->n == 1 && red->Pnnz == 1);
-        mu_assert("reduced c", red->c[0] == -1.0 && red->obj_offset == 18.0 &&
-                                   red->ubs[0] == 7.0);
+        mu_assert("reduced dims", red->m == 0 && red->n == 0 && red->Pnnz == 0);
+        mu_assert("reduced offset", red->obj_offset == 17.75);
 
-        double x[] = {0.5};
+        double x[] = {0};
         double y[] = {0};
         double z[] = {0};
         postsolve(presolver, x, y, z);
@@ -749,6 +745,65 @@ static char *test_16_qp()
     return 0;
 }
 
+/*  Diagonal-only empty columns with infinite bounds.
+    min. (1/2) x'Px + [-6 2 0 -1 -1] x,  P = diag(2, 4, 1, 0, 0)
+    s.t. x3 + x4 <= 5, x0 <= 1, x1 free, x2 >= 1, 0 <= x3, x4 <= 10
+    x0: minimiser 3, clipped to 1 (z0 = -4). x1: minimiser -0.5 inside, both
+    bounds infinite. x2: c = 0 gives 0, clipped to its lower bound 1 (z2 = 1).
+    Reduced (x3, x4): min -x3 - x4 s.t. x3 + x4 <= 5, offset -5, one optimal
+    point is x = (5, 0), y = -1, z = 0. */
+static char *test_17_qp()
+{
+    double Ax[] = {1, 1};
+    int Ai[] = {3, 4};
+    int Ap[] = {0, 2};
+    int n_rows = 1, n_cols = 5;
+    double lhs[] = {-INF};
+    double rhs[] = {5};
+    double lbs[] = {-INF, -INF, 1, 0, 0};
+    double ubs[] = {1, INF, INF, 10, 10};
+    double c[] = {-6, 2, 0, -1, -1};
+    double Px[] = {2, 4, 1};
+    int Pi[] = {0, 1, 2};
+    int Pp[] = {0, 1, 2, 3, 3, 3};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 3, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims", red->m == 1 && red->n == 2 && red->Pnnz == 0);
+    mu_assert("reduced c", red->c[0] == -1.0 && red->c[1] == -1.0);
+    mu_assert("reduced offset", red->obj_offset == -5.0);
+    mu_assert("no empty cols left",
+              presolver->prob->constraints->state->empty_cols->len == 0);
+
+    double x[] = {5, 0};
+    double y[] = {-1};
+    double z[] = {0, 0};
+    postsolve(presolver, x, y, z);
+
+    double correct_x[] = {1, -0.5, 1, 5, 0};
+    double correct_y[] = {-1};
+    double correct_z[] = {-4, 0, 1, 0, 0};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
@@ -761,6 +816,7 @@ static const char *all_tests_qp()
     mu_run_test(test_9_qp, counter_qp);
     mu_run_test(test_15_qp, counter_qp);
     mu_run_test(test_16_qp, counter_qp);
+    mu_run_test(test_17_qp, counter_qp);
     return 0;
 }
 
