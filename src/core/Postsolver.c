@@ -275,6 +275,17 @@ void retrieve_deleted_row(Solution *sol, int row, double val)
     sol->y[row] = val;
 }
 
+// yi += zk / aik and zk = 0 after FIXED_COL has recovered zk with yi = 0, see
+// save_retrieval_deleted_row_zk
+static void retrieve_deleted_row_zk(Solution *sol, const DeletedRowZkRecord *r)
+{
+    assert(sol->y[r->row] != ROW_NOT_RETRIEVED);
+    assert(sol->x[r->col] != COL_NOT_RETRIEVED);
+    assert(sol->z[r->col] != COL_NOT_RETRIEVED);
+    sol->y[r->row] += sol->z[r->col] / r->aik;
+    sol->z[r->col] = 0.0;
+}
+
 // yi = yi - (ajk / aik) yj whenever we make the jth constraint sparser by
 // zeroing out xk using equality row i
 void retrieve_added_row(Solution *sol, int i, int j, double ratio)
@@ -514,6 +525,12 @@ void postsolver_run(const PostsolveInfo *info, Solution *sol, const double *x,
                 decode_deleted_row(indices + start, vals + start, len);
             retrieve_deleted_row(sol, r.row, r.val);
         }
+        else if (type == DELETED_ROW_ZK)
+        {
+            DeletedRowZkRecord r =
+                decode_deleted_row_zk(indices + start, vals + start, len);
+            retrieve_deleted_row_zk(sol, &r);
+        }
         else if (type == ADDED_ROW)
         {
             AddedRowRecord r = decode_added_row(indices + start, vals + start, len);
@@ -725,6 +742,18 @@ void save_retrieval_deleted_row(PostsolveInfo *info, int row, double val)
     u16Vec_append(info->type, DELETED_ROW);
     iVec_append(info->indices, row);
     dVec_append(info->vals, val);
+    iVec_append(info->starts, (int) info->indices->len);
+    assert(info->starts->len == info->type->len + 1);
+    assert(info->vals->len == info->indices->len);
+}
+
+void save_retrieval_deleted_row_zk(PostsolveInfo *info, int row, int col, double aik)
+{
+    u16Vec_append(info->type, DELETED_ROW_ZK);
+    iVec_append(info->indices, row);
+    iVec_append(info->indices, col);
+    dVec_append(info->vals, aik);
+    dVec_append(info->vals, DUMMY_VALUE);
     iVec_append(info->starts, (int) info->indices->len);
     assert(info->starts->len == info->type->len + 1);
     assert(info->vals->len == info->indices->len);
