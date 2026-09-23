@@ -59,6 +59,9 @@ enum ReductionTypes
     // only required for mapping a solution to the reduced problem
     PARALLEL_ROW = 1 << 11,
     SIDE_RELAXED = 1 << 12,
+
+    // required for the dual postsolve of a QP
+    DELETED_ROW_ZK = 1 << 13,
 };
 
 typedef struct PostsolveInfo
@@ -353,6 +356,40 @@ static inline DeletedRowRecord decode_deleted_row(const int *indices,
     (void) record_len; // only used by the assert
     r.row = indices[0];
     r.val = vals[0];
+    return r;
+}
+
+/* Saves what is needed to recover yi when singleton equality row i
+   (coefficient aik) fixed xk and xk appears in P. The multiplier
+   yi = (Px + c)_k / aik needs x, so yi is left at 0 by the DELETED_ROW record
+   and, once the FIXED_COL record (which holds row k of P) has recovered
+   zk = (Px + c)_k - sum_j ajk yj with yi = 0, this record moves the residual
+   into yi:
+       yi += zk / aik,   zk = 0.
+   It is saved before fix_col so that it is replayed after FIXED_COL.
+   * info->vals stores    [aik, dummy]
+   * info->indices stores [row, col]
+*/
+void save_retrieval_deleted_row_zk(PostsolveInfo *info, int row, int col,
+                                   double aik);
+
+typedef struct DeletedRowZkRecord
+{
+    int row;
+    int col;
+    double aik;
+} DeletedRowZkRecord;
+
+static inline DeletedRowZkRecord
+decode_deleted_row_zk(const int *indices, const double *vals, int record_len)
+{
+    DeletedRowZkRecord r;
+    assert(record_len == 2);
+    (void) record_len; // only used by the assert
+    assert(vals[1] == DUMMY_VALUE);
+    r.row = indices[0];
+    r.col = indices[1];
+    r.aik = vals[0];
     return r;
 }
 

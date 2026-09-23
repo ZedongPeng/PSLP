@@ -28,11 +28,17 @@
    Test 1: structural validation of P in new_presolver
    Test 2: fix_col folds the coupling terms of P into c and removes the
            row/column of P
+   Test 3: singleton equality row fixing a variable that appears in P
+           (postsolve recovers y from the gradient)
    Test 4: empty columns: fixed by the sign of c when absent from P, kept
            when present in P
    Test 5: simple dual fix skips a variable that appears in P
    Test 7: parallel columns are not merged when one of them appears in P
+   Test 8: dual infeasibility ray after fixing a variable that appears in P
    Test 9: primal propagation fixing coupled variables (bound-change replay)
+   Test 15: two coupled variables fixed by two singleton equality rows, in
+            both orders (the first multiplier needs the later-fixed neighbour)
+   Test 16: primal infeasibility ray after fixing a variable that appears in P
    (doubleton equality rows are not supported for QPs yet; new_presolver
    returns NULL if dton_eq is set)
 */
@@ -263,6 +269,66 @@ static char *test_2_qp()
     return 0;
 }
 
+/*  Singleton equality row fixing a variable that appears in P.
+    min. (1/2) x'Px + [1 -3 1] x,  P = [2 1 0; 1 2 0; 0 0 0]
+    s.t. x0 = 2,  x1 + x2 <= 3,  0 <= x <= 10
+    Reduced (x1, x2): min x1^2 - x1 + x2 s.t. x1 + x2 <= 3, offset 6.
+    Reduced solution x = (0.5, 0), y = 0, z = (0, 1). */
+static char *test_3_qp()
+{
+    double Ax[] = {1, 1, 1};
+    int Ai[] = {0, 1, 2};
+    int Ap[] = {0, 1, 3};
+    int n_rows = 2, n_cols = 3;
+    double lhs[] = {2, -INF};
+    double rhs[] = {2, 3};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {10, 10, 10};
+    double c[] = {1, -3, 1};
+    double Px[] = {2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1};
+    int Pp[] = {0, 2, 4, 4};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims", red->m == 1 && red->n == 2 && red->nnz == 2);
+    mu_assert("reduced offset", red->obj_offset == 6.0);
+    mu_assert("reduced c", red->c[0] == -1.0 && red->c[1] == 1.0);
+    mu_assert("reduced P nnz", red->Pnnz == 1);
+    mu_assert("reduced P", red->Pp[0] == 0 && red->Pp[1] == 1 && red->Pp[2] == 1 &&
+                               red->Pi[0] == 0 && red->Px[0] == 2.0);
+    mu_assert("stats", presolver->stats->Pnnz_original == 4 &&
+                           presolver->stats->Pnnz_reduced == 1);
+
+    double x[] = {0.5, 0};
+    double y[] = {0};
+    double z[] = {0, 1};
+    postsolve(presolver, x, y, z);
+
+    double correct_x[] = {2, 0.5, 0};
+    double correct_y[] = {5.5, 0};
+    double correct_z[] = {0, 0, 1};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 /*  Empty columns with and without a quadratic term.
     min. (1/2) x'Px + [-4 1 0 0 0] x,
          P = 2 I on (x0, x2, x3), plus P_22 = P_44 = 2, P_24 = P_42 = 1
@@ -455,6 +521,59 @@ static char *test_7_qp()
     return 0;
 }
 
+/*  Dual infeasibility ray after a variable in P is fixed by a singleton
+    equality row.
+    min. (1/2) x'Px + [1 0 -1] x,  P = [2 1 0; 1 2 0; 0 0 0]
+    s.t. x0 = 1, x1 - x2 <= 5, 0 <= x0, x1 <= 10, 0 <= x2 < INF
+    Reduced (x1, x2): min x1^2 + x1 - x2 s.t. x1 - x2 <= 5, unbounded along
+    d = (0, 1). The recovered ray must be (0, 0, 1). */
+static char *test_8_qp()
+{
+    double Ax[] = {1, 1, -1};
+    int Ai[] = {0, 1, 2};
+    int Ap[] = {0, 1, 3};
+    int n_rows = 2, n_cols = 3;
+    double lhs[] = {1, -INF};
+    double rhs[] = {1, 5};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {10, 10, INF};
+    double c[] = {1, 0, -1};
+    double Px[] = {2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1};
+    int Pp[] = {0, 2, 4, 4};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims", red->m == 1 && red->n == 2);
+    mu_assert("reduced c", red->c[0] == 1.0 && red->c[1] == -1.0);
+    mu_assert("reduced P", red->Pnnz == 1 && red->Px[0] == 2.0 && red->Pi[0] == 0);
+
+    // the reduced ray is a valid certificate for the reduced problem
+    double d_red[] = {0, 1};
+    mu_assert("reduced ray", is_dual_ray_certificate(red, d_red, QP_TOL));
+
+    double d[3];
+    postsolve_dual_infeas_ray(presolver, d_red, d);
+    double correct_d[] = {0, 0, 1};
+    mu_assert("ray values", ABS(d[0] - correct_d[0]) <= QP_TOL &&
+                                ABS(d[1] - correct_d[1]) <= QP_TOL &&
+                                ABS(d[2] - correct_d[2]) <= QP_TOL);
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("ray certificate", is_dual_ray_certificate(&orig, d, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 /*  Primal propagation fixing two coupled variables (the FIXED_COL records
     are replayed inside the bound-change walk of the postsolver).
     min. (1/2) x'Px + [1 1] x,  P = [2 1; 1 2]
@@ -509,14 +628,139 @@ static char *test_9_qp()
     return 0;
 }
 
+/*  Two coupled variables fixed by singleton equality rows, in both row
+    orders. The multiplier of the row fixed first needs the neighbour that is
+    recovered by the later FIXED_COL record.
+    min. (1/2) x'Px + [1 -1 -4] x,  P = [2 1 0; 1 2 1; 0 1 2]
+    s.t. x1 = 3, x0 = 2, x1 + x2 <= 10, 0 <= x <= 10
+    Reduced (x2): min x2^2 - x2 s.t. x2 <= 7 (the last row becomes a bound),
+    offset 18, solution x2 = 0.5.
+    Original: x = (2, 3, 0.5), z = 0, y = (7.5, 8, 0) for the row order
+    above and (8, 7.5, 0) with the two equality rows swapped. */
+static char *test_15_qp()
+{
+    for (int swap = 0; swap < 2; ++swap)
+    {
+        double Ax[] = {1, 1, 1, 1};
+        int Ai[] = {1, 0, 1, 2};
+        int Ap[] = {0, 1, 2, 4};
+        int n_rows = 3, n_cols = 3;
+        double lhs[] = {3, 2, -INF};
+        double rhs[] = {3, 2, 10};
+        double correct_y[] = {7.5, 8, 0};
+        if (swap)
+        {
+            Ai[0] = 0;
+            Ai[1] = 1;
+            lhs[0] = rhs[0] = 2;
+            lhs[1] = rhs[1] = 3;
+            correct_y[0] = 8;
+            correct_y[1] = 7.5;
+        }
+        double lbs[] = {0, 0, 0};
+        double ubs[] = {10, 10, 10};
+        double c[] = {1, -1, -4};
+        double Px[] = {2, 1, 1, 2, 1, 1, 2};
+        int Pi[] = {0, 1, 0, 1, 2, 1, 2};
+        int Pp[] = {0, 2, 5, 7};
+
+        Settings *stgs = default_settings();
+        set_settings_false(stgs);
+        Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
+                                             lbs, ubs, c, Px, Pi, Pp, 7, stgs);
+        mu_assert("init", presolver != NULL);
+        mu_assert("status", run_presolver(presolver) == REDUCED);
+
+        PresolvedProblem *red = presolver->reduced_prob;
+        mu_assert("reduced dims", red->m == 0 && red->n == 1 && red->Pnnz == 1);
+        mu_assert("reduced c", red->c[0] == -1.0 && red->obj_offset == 18.0 &&
+                                   red->ubs[0] == 7.0);
+
+        double x[] = {0.5};
+        double y[] = {0};
+        double z[] = {0};
+        postsolve(presolver, x, y, z);
+
+        double correct_x[] = {2, 3, 0.5};
+        double correct_z[] = {0, 0, 0};
+        mu_assert("postsolve values",
+                  is_solution_correct(
+                      presolver->sol->x, correct_x, presolver->sol->y, correct_y,
+                      presolver->sol->z, correct_z, n_rows, n_cols, QP_TOL));
+        PresolvedProblem orig =
+            problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs,
+                                lbs, ubs, c, Px, Pi, Pp, Pp[n_cols]);
+        mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                      presolver->sol->z, QP_TOL));
+
+        PS_FREE(stgs);
+        free_presolver(presolver);
+    }
+    return 0;
+}
+
+/*  Primal infeasibility ray after a variable in P is fixed by a singleton
+    equality row.
+    min. (1/2) x'Px + [1 -1 -4] x,  P = [2 1 0; 1 2 0; 0 0 0]
+    s.t. x0 = 2, x1 + x2 >= 5, x1 + x2 <= 4, 0 <= x <= 10
+    The reduced rows contradict each other; the reduced certificate (-1, 1)
+    must come back as (0, -1, 1). */
+static char *test_16_qp()
+{
+    double Ax[] = {1, 1, 1, 1, 1};
+    int Ai[] = {0, 1, 2, 1, 2};
+    int Ap[] = {0, 1, 3, 5};
+    int n_rows = 3, n_cols = 3;
+    double lhs[] = {2, 5, -INF};
+    double rhs[] = {2, INF, 4};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {10, 10, 10};
+    double c[] = {1, -1, -4};
+    double Px[] = {2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1};
+    int Pp[] = {0, 2, 4, 4};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 5, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims", red->m == 2 && red->n == 2);
+
+    double y_red[] = {-1, 1};
+    mu_assert("reduced certificate", is_primal_ray_certificate(red, y_red, QP_TOL));
+
+    double y[3];
+    postsolve_primal_infeas_ray(presolver, y_red, y);
+    double correct_y[] = {0, -1, 1};
+    mu_assert("ray values", ABS(y[0] - correct_y[0]) <= QP_TOL &&
+                                ABS(y[1] - correct_y[1]) <= QP_TOL &&
+                                ABS(y[2] - correct_y[2]) <= QP_TOL);
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("ray certificate", is_primal_ray_certificate(&orig, y, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
     mu_run_test(test_2_qp, counter_qp);
+    mu_run_test(test_3_qp, counter_qp);
     mu_run_test(test_4_qp, counter_qp);
     mu_run_test(test_5_qp, counter_qp);
     mu_run_test(test_7_qp, counter_qp);
+    mu_run_test(test_8_qp, counter_qp);
     mu_run_test(test_9_qp, counter_qp);
+    mu_run_test(test_15_qp, counter_qp);
+    mu_run_test(test_16_qp, counter_qp);
     return 0;
 }
 

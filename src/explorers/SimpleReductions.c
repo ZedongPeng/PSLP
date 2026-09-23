@@ -147,14 +147,22 @@ static inline PresolveStatus remove_stonrow(Problem *prob, int row)
     assert(!HAS_TAG(col_tag, C_TAG_INACTIVE));
 
     // ----------------------------------------------------------------------
-    //  if the row is an equality, we fix the variable (unless it appears in
-    //  P: then the branch below tightens both bounds and the column stays)
+    //        if the row is an equality, we fix the variable
     // ----------------------------------------------------------------------
-    if (HAS_TAG(*row_tag, R_TAG_EQ) && !col_in_P(constrs->state, k))
+    if (HAS_TAG(*row_tag, R_TAG_EQ))
     {
         assert(lhs == rhs);
-
         double ck = prob->obj->c[k];
+        bool k_in_P = col_in_P(constrs->state, k);
+
+        // For a variable in P the multiplier yi = (Px + c)_k / aik needs x, so
+        // the postsolve takes it from zk once xk is recovered. The record is
+        // saved before fix_col since it must be replayed after FIXED_COL.
+        if (k_in_P)
+        {
+            save_retrieval_deleted_row_zk(postsolve_info, row, k, aik);
+        }
+
         if (fix_col(prob, k, rhs / aik) == INFEASIBLE)
         {
             return INFEASIBLE;
@@ -174,7 +182,7 @@ static inline PresolveStatus remove_stonrow(Problem *prob, int row)
         const double *vals = AT->x + AT->p[k].start;
         size_t len = (size_t) (AT->p[k].end - AT->p[k].start);
         save_retrieval_added_rows(postsolve_info, row, rows, vals, len, aik);
-        save_retrieval_deleted_row(postsolve_info, row, ck / aik);
+        save_retrieval_deleted_row(postsolve_info, row, k_in_P ? 0.0 : ck / aik);
     }
     // ----------------------------------------------------------------------
     //  if the row is an inequality, we update the bounds (if they are tighter

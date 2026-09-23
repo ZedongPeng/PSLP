@@ -207,10 +207,10 @@ extern "C"
        x is an unbounded direction: a recession direction of the constraint
        set with Px = 0 and c'x < 0 (for an LP simply c'x < 0); no sign
        convention involved. The recovered ray satisfies the same conditions
-       for the original problem: fixed variables get a zero component, a
-       substitution is a linear change of variables that preserves c'd, and
-       variables that appear in P are never removed by the presolver, so
-       P d is unchanged. */
+       for the original problem: fixed variables get a zero component and
+       only variables with an empty row of P are substituted, so d'Pd = 0
+       carries over; for a PSD P that forces Pd = 0, and then c'd carries
+       over too. */
     void postsolve_dual_infeas_ray(Presolver *presolver, const double *x,
                                    double *x_orig);
 
