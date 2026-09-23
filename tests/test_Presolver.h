@@ -31,8 +31,8 @@ static char *test_00_presolver()
     double c[] = {2, -1, -1, 3, 2};
 
     Settings *stgs = default_settings();
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     mu_assert("Presolver initialization failed", presolver != NULL);
     PS_FREE(stgs);
@@ -80,8 +80,8 @@ static char *test_01_presolver()
     Settings *stgs = default_settings();
     stgs->parallel_rows = false;
     stgs->parallel_cols = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     mu_assert("Presolver initialization failed", presolver != NULL);
 
     run_presolver(presolver);
@@ -113,8 +113,8 @@ static char *test_02_presolver()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     mu_assert("Presolver initialization failed", presolver != NULL);
 
     run_presolver(presolver);

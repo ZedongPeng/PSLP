@@ -210,11 +210,21 @@ void presolver_clean_up(clean_up_scope scope)
 Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t m,
                          size_t n, size_t nnz, const double *lhs, const double *rhs,
                          const double *lbs, const double *ubs, const double *c,
+                         const double *Px, const int *Pi, const int *Pp, size_t Pnnz,
                          const Settings *stgs)
 {
     /* the row pointers of the internal matrices are ints, so a valid CSR
        input has at most INT_MAX non-zeros */
     if (nnz > (size_t) INT_MAX)
+    {
+        return NULL;
+    }
+
+    /* a quadratic objective term is not supported yet */
+    (void) Px;
+    (void) Pi;
+    (void) Pp;
+    if (Pnnz > 0)
     {
         return NULL;
     }

@@ -27,8 +27,8 @@ static char *test_1_core()
     double c[] = {0, 0, 0, 0};
 
     Settings *stgs = default_settings();
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Constraints *constraints = presolver->prob->constraints;
 
@@ -82,8 +82,8 @@ static char *test_2_core()
     double c[] = {0, 3, 5, 7};
 
     Settings *stgs = default_settings();
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     Problem *prob = presolver->prob;
     const ColTag *col_tags = prob->constraints->col_tags;
 
@@ -128,8 +128,8 @@ static char *test_3_core()
     double c[] = {1, 1, 7};
 
     Settings *stgs = default_settings();
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     Problem *prob = presolver->prob;
     const ColTag *col_tags = prob->constraints->col_tags;
 

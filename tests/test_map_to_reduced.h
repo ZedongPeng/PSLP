@@ -87,8 +87,8 @@ static char *test_map_ston_row()
     set_settings_true(stgs);
     stgs->parallel_cols = false;
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
 
     // optimal solution to the reduced problem
@@ -164,8 +164,8 @@ static char *test_map_dton_eq_row()
     set_settings_true(stgs);
     stgs->parallel_cols = false;
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
 
     double x_red[] = {10, -10, 0.5333333, -10, 0.6666666, -10};
@@ -206,8 +206,8 @@ static char *test_map_free_col_singletons()
     set_settings_true(stgs);
     stgs->primal_propagation = false;
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
 
     double x_red[] = {0.33333333, 0.0, 0.33333333};
@@ -251,8 +251,8 @@ static char *test_map_implied_free_col_singleton()
     stgs->parallel_cols = false;
     stgs->dual_fix = false;
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
 
     double x_red[] = {0., 1., 0.};
@@ -300,8 +300,8 @@ static char *test_map_eq_to_ineq_dual_sign()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->ston_cols = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
     mu_assert("map eq to ineq dual sign: reduced problem should be 2 x 2",
               presolver->reduced_prob->m == 2 && presolver->reduced_prob->n == 2);
@@ -356,8 +356,8 @@ static char *test_map_redundant_side_dual_sign()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->primal_propagation = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
     mu_assert("map redundant side: reduced problem should be 1 x 2",
               presolver->reduced_prob->m == 1 && presolver->reduced_prob->n == 2);
@@ -409,8 +409,8 @@ static char *test_map_dton_free_var()
     stgs->primal_propagation = false;
     stgs->dual_fix = false;
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
 
     double x_red[] = {0.83333333, 0.16666667, 0., 0.};
@@ -459,8 +459,8 @@ static char *test_map_parallel_rows()
     stgs->primal_propagation = false;
     stgs->parallel_cols = false;
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
     mu_assert("map parallel rows: one row should remain",
               presolver->reduced_prob->m == 1);
@@ -514,8 +514,8 @@ static char *test_map_parallel_rows_eq_remains()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->parallel_rows = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
     mu_assert("map parallel rows eq remains: one row should remain",
               presolver->reduced_prob->m == 1);
@@ -563,8 +563,8 @@ static char *test_map_parallel_cols()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->parallel_cols = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
 
     double x_red[] = {7, 10};
@@ -610,8 +610,8 @@ static char *test_map_fix_col_inf()
     stgs->parallel_cols = false;
     stgs->primal_propagation = false;
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
 
     double x_red[] = {0.75, 0.5};
@@ -655,8 +655,8 @@ static char *test_map_after_free_reduced_problem()
     stgs->primal_propagation = false;
     stgs->dual_fix = false;
     stgs->verbose = false;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
     free_presolver_reduced_problem(presolver);
 

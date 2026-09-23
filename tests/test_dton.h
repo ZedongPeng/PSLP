@@ -389,8 +389,8 @@ static char *test_1_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -470,8 +470,8 @@ static char *test_2_dton()
     set_settings_false(stgs);
     stgs->dton_eq = true;
 
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PS_FREE(stgs);
     free_presolver(presolver);
@@ -550,8 +550,8 @@ static char *test_3_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -626,8 +626,8 @@ static char *test_004_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -702,8 +702,8 @@ static char *test_4_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -779,8 +779,8 @@ static char *test_5_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PS_FREE(stgs);
     // DEBUG(run_debugger(constraints, false));
@@ -818,8 +818,8 @@ static char *test_6_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -894,8 +894,8 @@ static char *test_7_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -974,8 +974,8 @@ static char *test_8_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1048,8 +1048,8 @@ static char *test_9_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1124,8 +1124,8 @@ static char *test_10_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1200,8 +1200,8 @@ static char *test_11_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1262,8 +1262,8 @@ static char *test_12_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     PS_FREE(stgs);
     // DEBUG(run_debugger(constraints, false));
@@ -1315,8 +1315,8 @@ static char *test_13_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1372,8 +1372,8 @@ static char *test_14_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1430,8 +1430,8 @@ static char *test_15_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1488,8 +1488,8 @@ static char *test_16_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1550,8 +1550,8 @@ static char *test_17_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1607,8 +1607,8 @@ static char *test_18_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -1674,8 +1674,8 @@ static char *test_19_dton()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver =
-        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
+                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
 
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
