@@ -110,54 +110,12 @@ static inline PresolveStatus _simple_dual_fix(Problem *prob, double ck, double l
     return UNCHANGED;
 }
 
-/* Tightens the upper (is_upper_bound) or lower bound of a variable to
-   new_bound and updates the activities. No postsolve record: the caller has
-   shown that no optimal solution has the variable beyond new_bound, so the
-   new bound is never binding. */
-static void tighten_bound(Problem *prob, int col, double new_bound,
-                          bool is_upper_bound)
-{
-    Constraints *constraints = prob->constraints;
-    State *data = constraints->state;
-    Bound *bounds = constraints->bounds;
-    ColTag *col_tag = constraints->col_tags + col;
-    ColTag inf_tag = is_upper_bound ? C_TAG_UB_INF : C_TAG_LB_INF;
-    bool is_inf = HAS_TAG(*col_tag, inf_tag);
-    double old_bound = is_upper_bound ? bounds[col].ub : bounds[col].lb;
-    assert(!HAS_TAG(*col_tag, C_TAG_INACTIVE));
-    assert(!IS_ABS_INF(new_bound) && !IS_HUGE(new_bound));
-    assert(is_inf ||
-           (is_upper_bound ? new_bound < old_bound : new_bound > old_bound));
-    assert(is_upper_bound
-               ? (HAS_TAG(*col_tag, C_TAG_LB_INF) || new_bound >= bounds[col].lb)
-               : (HAS_TAG(*col_tag, C_TAG_UB_INF) || new_bound <= bounds[col].ub));
-
-    const Matrix *AT = constraints->AT;
-    const double *vals = AT->x + AT->p[col].start;
-    const int *rows = AT->i + AT->p[col].start;
-    int len = AT->p[col].end - AT->p[col].start;
-
-    if (is_upper_bound)
-    {
-        bounds[col].ub = new_bound;
-    }
-    else
-    {
-        bounds[col].lb = new_bound;
-    }
-
-    update_activities_bound_change(data->activities, constraints->A, bounds, vals,
-                                   rows, len, old_bound, new_bound, !is_inf,
-                                   !is_upper_bound,
-                                   data->updated_activities HUGE_BOUND_IS_NOT_OK);
-    REMOVE_TAG(*col_tag, inf_tag);
-}
-
 /* Dual fix for a variable whose row of P is the single diagonal Pkk > 0. The
    objective in xk is (1/2) Pkk xk^2 + ck xk with minimizer x* = -ck / Pkk.
-   Without down-locks some optimal solution has xk <= max(lb, x*), without
-   up-locks xk >= min(ub, x*): fix xk when the interval is a point, otherwise
-   tighten the bound. */
+   Without down-locks some optimal solution has xk <= max(lb, x*), so xk is
+   fixed at lb if x* <= lb; symmetrically without up-locks. Tightening the
+   bound to an interior x* is left out: it removes nothing by itself and puts
+   a degenerate active bound at the optimum. */
 static inline void diagonal_dual_fix(Problem *prob, int col, double Pkk)
 {
     const Constraints *constraints = prob->constraints;
@@ -201,10 +159,6 @@ static inline void diagonal_dual_fix(Problem *prob, int col, double Pkk)
         {
             fix_col(prob, col, lb);
         }
-        else if (ub_inf || xstar <= ub - FEAS_TOL)
-        {
-            tighten_bound(prob, col, xstar, true);
-        }
         return;
     }
 
@@ -213,10 +167,6 @@ static inline void diagonal_dual_fix(Problem *prob, int col, double Pkk)
     if (!ub_inf && xstar >= ub)
     {
         fix_col(prob, col, ub);
-    }
-    else if (lb_inf || xstar >= lb + FEAS_TOL)
-    {
-        tighten_bound(prob, col, xstar, false);
     }
 }
 

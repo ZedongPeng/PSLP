@@ -36,8 +36,9 @@
    Test 7: parallel columns are not merged when one of them appears in P
    Test 8: dual infeasibility ray after fixing a variable that appears in P
    Test 9: primal propagation fixing coupled variables (bound-change replay)
-   Test 11: diagonal dual fix fixes one variable and tightens another
-   Test 12: diagonal dual bound tightening kept in the reduced problem
+   Test 11: diagonal dual fix fixes variables whose minimiser is beyond the
+            bound on the unlocked side
+   Test 12: diagonal dual fix leaves a variable with an interior minimiser
    Test 15: two coupled variables fixed by two singleton equality rows, in
             both orders (the first multiplier needs the later-fixed neighbour)
    Test 16: primal infeasibility ray after fixing a variable that appears in P
@@ -627,10 +628,10 @@ static char *test_9_qp()
 }
 
 /*  Diagonal dual fix (PRIMALC-like structure).
-    min. x0^2 + x1^2 + x0 - 4 x1 s.t. x0 + x1 <= 5, x0 + 2 x1 <= 8, 0 <= x <= 10
-    No variable has down-locks. x0: -c0 / P00 = -0.5 <= lb, so x0 = 0.
-    x1: -c1 / P11 = 2, so ub1 = 2; the rows then become redundant and x1 an
-    empty column with a diagonal, fixed at 2. Everything is removed. */
+    min. x0^2 + x1^2 + x0 + 4 x1 s.t. x0 + x1 <= 5, x0 + 2 x1 <= 8, 0 <= x <= 10
+    No variable has down-locks and both minimisers -c0 / P00 = -0.5 and
+    -c1 / P11 = -2 are below lb = 0, so both are fixed at 0 and the rows become
+    redundant. Everything is removed. */
 static char *test_11_qp()
 {
     double Ax[] = {1, 1, 1, 2};
@@ -641,7 +642,7 @@ static char *test_11_qp()
     double rhs[] = {5, 8};
     double lbs[] = {0, 0};
     double ubs[] = {10, 10};
-    double c[] = {1, -4};
+    double c[] = {1, 4};
     double Px[] = {2, 2};
     int Pi[] = {0, 1};
     int Pp[] = {0, 1, 2};
@@ -656,13 +657,13 @@ static char *test_11_qp()
 
     PresolvedProblem *red = presolver->reduced_prob;
     mu_assert("reduced dims", red->m == 0 && red->n == 0 && red->Pnnz == 0);
-    mu_assert("reduced offset", red->obj_offset == -4.0);
+    mu_assert("reduced offset", red->obj_offset == 0.0);
 
     postsolve(presolver, NULL, NULL, NULL);
 
-    double correct_x[] = {0, 2};
+    double correct_x[] = {0, 0};
     double correct_y[] = {0, 0};
-    double correct_z[] = {1, 0};
+    double correct_z[] = {1, 4};
     mu_assert("postsolve values",
               is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
                                   correct_y, presolver->sol->z, correct_z, n_rows,
@@ -678,11 +679,11 @@ static char *test_11_qp()
     return 0;
 }
 
-/*  Diagonal dual bound tightening that stays in the reduced problem.
+/*  Diagonal dual fix with an interior minimiser: nothing happens.
     min. x0^2 - 4 x0 + x1 - x2 s.t. x0 - x1 + x2 <= 3, 0 <= x <= 10
-    Only dual fix is enabled. x0 has no down-locks and -c0 / P00 = 2, so its
-    upper bound becomes 2; x1 and x2 are locked. Reduced solution
-    x = (1.5, 0, 1.5), y = -1, z = 0. */
+    Only dual fix is enabled. x0 has no down-locks and -c0 / P00 = 2 is inside
+    its bounds, so x0 is left alone (no bound tightening); x1 and x2 are
+    locked. Solution x = (1.5, 0, 1.5), y = -1, z = 0. */
 static char *test_12_qp()
 {
     double Ax[] = {1, -1, 1};
@@ -708,7 +709,7 @@ static char *test_12_qp()
 
     PresolvedProblem *red = presolver->reduced_prob;
     mu_assert("reduced dims", red->m == 1 && red->n == 3 && red->Pnnz == 1);
-    mu_assert("tightened bound", red->ubs[0] == 2.0 && red->lbs[0] == 0.0);
+    mu_assert("bounds unchanged", red->ubs[0] == 10.0 && red->lbs[0] == 0.0);
 
     double x[] = {1.5, 0, 1.5};
     double y[] = {-1};
