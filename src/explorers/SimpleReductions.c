@@ -552,9 +552,40 @@ PresolveStatus remove_empty_cols(Problem *prob)
 
         assert(col_sizes[k] == 0 && !HAS_TAG(col_tags[k], C_TAG_INACTIVE));
 
+        // ---------------------------------------------------------------
+        // With only a positive diagonal in P the objective in x_k is
+        // (1/2) P_kk x_k^2 + c_k x_k, so x_k = clip(-c_k / P_kk, lb, ub).
+        // ---------------------------------------------------------------
         if (col_in_P(state, k))
         {
-            empty_cols->data[n_kept++] = k;
+            const Matrix *P = prob->obj->P;
+            double Pkk;
+            if (!diagonal_only_P_entry(P, state->P_row_sizes, k, &Pkk))
+            {
+                empty_cols->data[n_kept++] = k;
+                continue;
+            }
+
+            val = -c[k] / Pkk;
+            if (!HAS_TAG(col_tags[k], C_TAG_LB_INF) && val < bounds[k].lb)
+            {
+                val = bounds[k].lb;
+            }
+            else if (!HAS_TAG(col_tags[k], C_TAG_UB_INF) && val > bounds[k].ub)
+            {
+                val = bounds[k].ub;
+            }
+
+            bounds[k].lb = val;
+            bounds[k].ub = val;
+
+            // for the postsolve zk = ck + Pkk xk; as in fix_col the record is
+            // saved before the objective update
+            save_retrieval_fixed_col(postsolve_info, k, val, c[k], NULL, NULL, 0,
+                                     P->x + P->p[k].start, P->i + P->p[k].start, 1);
+            fix_var_in_obj(prob, k, val);
+            UPDATE_TAG(col_tags[k], C_TAG_FIXED);
+            col_sizes[k] = SIZE_INACTIVE_COL;
             continue;
         }
 
@@ -618,6 +649,7 @@ PresolveStatus remove_empty_cols(Problem *prob)
         fix_var_in_obj(prob, k, val);
     }
 
+    // only the columns coupled through P remain
     empty_cols->len = n_kept;
     return UNCHANGED;
 }

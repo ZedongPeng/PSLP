@@ -97,6 +97,23 @@ void mark_P_row_inactive(Problem *prob, int k)
     P_row_sizes[k] = SIZE_INACTIVE_COL;
 }
 
+bool diagonal_only_P_entry(const Matrix *P, const int *P_row_sizes, int k, double *Pkk)
+{
+    if (P_row_sizes[k] != 1)
+    {
+        return false;
+    }
+
+    int start = P->p[k].start;
+    if (P->i[start] != k || P->x[start] <= 0.0)
+    {
+        return false;
+    }
+
+    *Pkk = P->x[start];
+    return true;
+}
+
 void fix_var_in_obj(Problem *prob, int col, double value)
 {
     Objective *obj = prob->obj;
