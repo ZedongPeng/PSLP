@@ -560,8 +560,8 @@ PresolveStatus remove_empty_cols(Problem *prob)
         if (col_in_P(state, k))
         {
             const Matrix *P = prob->obj->P;
-            double Pkk = diagonal_only_P_entry(P, state->P_row_sizes, k);
-            if (Pkk <= 0)
+            double Pkk;
+            if (!diagonal_only_P_entry(P, state->P_row_sizes, k, &Pkk))
             {
                 empty_cols->data[n_kept++] = k;
                 continue;

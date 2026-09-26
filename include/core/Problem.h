@@ -72,10 +72,14 @@ void sub_var_in_obj(Problem *prob, const double *vals, const int *cols, int len,
 /* Marks row k of P (which must be empty) as removed. */
 void mark_P_row_inactive(Problem *prob, int k);
 
-/* Returns P_kk if row k of P holds exactly one entry and it is a positive
-   diagonal, and 0 otherwise. For such a variable the objective restricted to
-   xk is (1/2) P_kk xk^2 + ck xk regardless of the other variables. */
-double diagonal_only_P_entry(const struct Matrix *P, const int *P_row_sizes, int k);
+/* True if row k of P holds exactly one entry and it is a positive diagonal,
+   in which case *Pkk is set to it. For such a variable the objective
+   restricted to xk is (1/2) Pkk xk^2 + ck xk regardless of the other
+   variables. The index and sign checks are not redundant: check_P_input
+   tolerates a row with no diagonal whose off-diagonal entries are below
+   PSD_ZERO_DIAG_TOL, and such a row can have size one. */
+bool diagonal_only_P_entry(const struct Matrix *P, const int *P_row_sizes, int k,
+                           double *Pkk);
 
 /* Substitutes variable 'subst' from the objective using the doubleton
    equality row aij * x_stay + aik * x_subst = rhs. Row subst of P must be
