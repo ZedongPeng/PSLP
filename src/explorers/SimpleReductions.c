@@ -552,11 +552,8 @@ PresolveStatus remove_empty_cols(Problem *prob)
 
         assert(col_sizes[k] == 0 && !HAS_TAG(col_tags[k], C_TAG_INACTIVE));
 
-        // A column that is empty in A but appears in P is not free to fix by
-        // the sign of c_k. With only a (positive) diagonal the objective in
-        // x_k is (1/2) P_kk x_k^2 + c_k x_k, so x_k = clip(-c_k / P_kk, lb, ub).
-        // With off-diagonal entries eliminating it would create fill-in in P;
-        // keep it in the worklist until its P row shrinks.
+        // With only a positive diagonal in P the objective in x_k is
+        // (1/2) P_kk x_k^2 + c_k x_k, so x_k = clip(-c_k / P_kk, lb, ub).
         if (col_in_P(state, k))
         {
             const Matrix *P = prob->obj->P;
