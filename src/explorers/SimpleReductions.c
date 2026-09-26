@@ -552,8 +552,10 @@ PresolveStatus remove_empty_cols(Problem *prob)
 
         assert(col_sizes[k] == 0 && !HAS_TAG(col_tags[k], C_TAG_INACTIVE));
 
+        // ---------------------------------------------------------------
         // With only a positive diagonal in P the objective in x_k is
         // (1/2) P_kk x_k^2 + c_k x_k, so x_k = clip(-c_k / P_kk, lb, ub).
+        // ---------------------------------------------------------------
         if (col_in_P(state, k))
         {
             const Matrix *P = prob->obj->P;
