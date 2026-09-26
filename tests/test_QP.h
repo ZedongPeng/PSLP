@@ -36,6 +36,8 @@
    Test 7: parallel columns are not merged when one of them appears in P
    Test 8: dual infeasibility ray after fixing a variable that appears in P
    Test 9: primal propagation fixing coupled variables (bound-change replay)
+   Test 11: diagonal dual fix fixes one variable and tightens another
+   Test 12: diagonal dual bound tightening kept in the reduced problem
    Test 15: two coupled variables fixed by two singleton equality rows, in
             both orders (the first multiplier needs the later-fixed neighbour)
    Test 16: primal infeasibility ray after fixing a variable that appears in P
@@ -624,6 +626,108 @@ static char *test_9_qp()
     return 0;
 }
 
+/*  Diagonal dual fix (PRIMALC-like structure).
+    min. x0^2 + x1^2 + x0 - 4 x1 s.t. x0 + x1 <= 5, x0 + 2 x1 <= 8, 0 <= x <= 10
+    No variable has down-locks. x0: -c0 / P00 = -0.5 <= lb, so x0 = 0.
+    x1: -c1 / P11 = 2, so ub1 = 2; the rows then become redundant and x1 an
+    empty column with a diagonal, fixed at 2. Everything is removed. */
+static char *test_11_qp()
+{
+    double Ax[] = {1, 1, 1, 2};
+    int Ai[] = {0, 1, 0, 1};
+    int Ap[] = {0, 2, 4};
+    int n_rows = 2, n_cols = 2;
+    double lhs[] = {-INF, -INF};
+    double rhs[] = {5, 8};
+    double lbs[] = {0, 0};
+    double ubs[] = {10, 10};
+    double c[] = {1, -4};
+    double Px[] = {2, 2};
+    int Pi[] = {0, 1};
+    int Pp[] = {0, 1, 2};
+
+    Settings *stgs = default_settings();
+    stgs->verbose = false;
+    stgs->dton_eq = false;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 2, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims", red->m == 0 && red->n == 0 && red->Pnnz == 0);
+    mu_assert("reduced offset", red->obj_offset == -4.0);
+
+    postsolve(presolver, NULL, NULL, NULL);
+
+    double correct_x[] = {0, 2};
+    double correct_y[] = {0, 0};
+    double correct_z[] = {1, 0};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
+/*  Diagonal dual bound tightening that stays in the reduced problem.
+    min. x0^2 - 4 x0 + x1 - x2 s.t. x0 - x1 + x2 <= 3, 0 <= x <= 10
+    Only dual fix is enabled. x0 has no down-locks and -c0 / P00 = 2, so its
+    upper bound becomes 2; x1 and x2 are locked. Reduced solution
+    x = (1.5, 0, 1.5), y = -1, z = 0. */
+static char *test_12_qp()
+{
+    double Ax[] = {1, -1, 1};
+    int Ai[] = {0, 1, 2};
+    int Ap[] = {0, 3};
+    int n_rows = 1, n_cols = 3;
+    double lhs[] = {-INF};
+    double rhs[] = {3};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {10, 10, 10};
+    double c[] = {-4, 1, -1};
+    double Px[] = {2};
+    int Pi[] = {0};
+    int Pp[] = {0, 1, 1, 1};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dual_fix = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    mu_assert("init", presolver != NULL);
+    run_presolver(presolver);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims", red->m == 1 && red->n == 3 && red->Pnnz == 1);
+    mu_assert("tightened bound", red->ubs[0] == 2.0 && red->lbs[0] == 0.0);
+
+    double x[] = {1.5, 0, 1.5};
+    double y[] = {-1};
+    double z[] = {0, 0, 0};
+    postsolve(presolver, x, y, z);
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, x, presolver->sol->y, y,
+                                  presolver->sol->z, z, n_rows, n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 /*  Two coupled variables fixed by singleton equality rows, in both row
     orders. The multiplier of the row fixed first needs the neighbour that is
     recovered by the later FIXED_COL record.
@@ -814,6 +918,8 @@ static const char *all_tests_qp()
     mu_run_test(test_7_qp, counter_qp);
     mu_run_test(test_8_qp, counter_qp);
     mu_run_test(test_9_qp, counter_qp);
+    mu_run_test(test_11_qp, counter_qp);
+    mu_run_test(test_12_qp, counter_qp);
     mu_run_test(test_15_qp, counter_qp);
     mu_run_test(test_16_qp, counter_qp);
     mu_run_test(test_17_qp, counter_qp);
