@@ -22,6 +22,8 @@
 #include "CoreTransformations.h"
 #include "Debugger.h"
 #include "Locks.h"
+#include "Matrix.h"
+#include "Numerics.h"
 #include "Problem.h"
 #include "SimpleReductions.h"
 #include "State.h"
@@ -108,6 +110,66 @@ static inline PresolveStatus _simple_dual_fix(Problem *prob, double ck, double l
     return UNCHANGED;
 }
 
+/* Dual fix for a variable whose row of P is the single diagonal Pkk > 0. The
+   objective in xk is (1/2) Pkk xk^2 + ck xk with minimizer x* = -ck / Pkk.
+   Without down-locks some optimal solution has xk <= max(lb, x*), so xk is
+   fixed at lb if x* <= lb; symmetrically without up-locks. Tightening the
+   bound to an interior x* is left out: it removes nothing by itself and puts
+   a degenerate active bound at the optimum. */
+static inline void diagonal_dual_fix(Problem *prob, int col, double Pkk)
+{
+    const Constraints *constraints = prob->constraints;
+    const Bound *bounds = constraints->bounds;
+    ColTag col_tag = constraints->col_tags[col];
+    Lock lock = constraints->state->col_locks[col];
+    bool lb_inf = HAS_TAG(col_tag, C_TAG_LB_INF);
+    bool ub_inf = HAS_TAG(col_tag, C_TAG_UB_INF);
+    double lb = bounds[col].lb;
+    double ub = bounds[col].ub;
+    double xstar = -prob->obj->c[col] / Pkk;
+    assert(!HAS_TAG(col_tag, C_TAG_INACTIVE) && Pkk > 0);
+    assert(constraints->state->col_sizes[col] > 0);
+
+    if (IS_HUGE(xstar))
+    {
+        return;
+    }
+
+    // no locks at all: xk = clip(x*, lb, ub)
+    if (lock.down == 0 && lock.up == 0)
+    {
+        double val = xstar;
+        if (!lb_inf && val < lb)
+        {
+            val = lb;
+        }
+        else if (!ub_inf && val > ub)
+        {
+            val = ub;
+        }
+
+        fix_col(prob, col, val);
+        return;
+    }
+
+    // no down-locks: xk <= max(lb, x*)
+    if (lock.down == 0)
+    {
+        if (!lb_inf && xstar <= lb)
+        {
+            fix_col(prob, col, lb);
+        }
+        return;
+    }
+
+    // no up-locks: xk >= min(ub, x*)
+    assert(lock.up == 0);
+    if (!ub_inf && xstar >= ub)
+    {
+        fix_col(prob, col, ub);
+    }
+}
+
 PresolveStatus simple_dual_fix(Problem *prob)
 {
     assert(!has_removable_empty_cols(prob->constraints->state));
@@ -118,6 +180,9 @@ PresolveStatus simple_dual_fix(Problem *prob)
     const Bound *bounds = constraints->bounds;
     const ColTag *col_tags = constraints->col_tags;
     const Lock *locks = constraints->state->col_locks;
+    const int *P_row_sizes = constraints->state->P_row_sizes;
+    const int *col_sizes = constraints->state->col_sizes;
+    const Matrix *P = prob->obj->P;
     size_t n_cols = constraints->n;
     iVec *cols_to_inf = constraints->state->work->int_vec;
     iVec_clear_no_resize(cols_to_inf);
@@ -133,8 +198,16 @@ PresolveStatus simple_dual_fix(Problem *prob)
             continue;
         }
 
+        // the sign of the objective gradient depends on x unless row k of P is
+        // empty or a single diagonal; empty columns are left to remove_empty_cols
         if (col_in_P(constraints->state, (int) k))
         {
+            double Pkk;
+            if (diagonal_only_P_entry(P, P_row_sizes, (int) k, &Pkk) &&
+                col_sizes[k] > 0)
+            {
+                diagonal_dual_fix(prob, (int) k, Pkk);
+            }
             continue;
         }
 
