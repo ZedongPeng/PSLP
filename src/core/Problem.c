@@ -97,7 +97,8 @@ void mark_P_row_inactive(Problem *prob, int k)
     P_row_sizes[k] = SIZE_INACTIVE_COL;
 }
 
-bool diagonal_only_P_entry(const Matrix *P, const int *P_row_sizes, int k, double *Pkk)
+bool diagonal_only_P_entry(const Matrix *P, const int *P_row_sizes, int k,
+                           double *Pkk)
 {
     if (P_row_sizes[k] != 1)
     {
@@ -200,12 +201,10 @@ void sub_var_in_obj(Problem *prob, const double *vals, const int *cols, int len,
     obj->offset += rhs * ratio;
 }
 
-void sub_var_in_obj_dton(Problem *prob, int stay, int subst, double aik, double aij,
-                         double rhs)
+void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
+                         double shift)
 {
-    Objective *obj = prob->obj;
-    mark_P_row_inactive(prob, subst);
-
-    obj->c[stay] -= (aij / aik) * obj->c[subst];
-    obj->offset += (rhs / aik) * obj->c[subst];
+    obj->c[stay] += mult * obj->c[subst];
+    obj->offset += shift * obj->c[subst];
+    obj->c[subst] = 0.0;
 }

@@ -78,11 +78,9 @@ void mark_P_row_inactive(Problem *prob, int k);
 bool diagonal_only_P_entry(const struct Matrix *P, const int *P_row_sizes, int k,
                            double *Pkk);
 
-/* Substitutes variable 'subst' from the objective using the doubleton
-   equality row aij * x_stay + aik * x_subst = rhs. Row subst of P must be
-   empty and is marked inactive. c[subst] is left unchanged; the caller
-   stores it for the postsolve. */
-void sub_var_in_obj_dton(Problem *prob, int stay, int subst, double aik, double aij,
-                         double rhs);
+/* Substitutes x_subst = shift + mult * x_stay in the objective and zeroes
+   c[subst]. */
+void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
+                         double shift);
 
 #endif // CORE_PROBLEM_H

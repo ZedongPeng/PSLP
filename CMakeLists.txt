@@ -3,7 +3,7 @@ project(PSLP LANGUAGES C CXX) # The library is written in C, but we also have so
 
 set(PSLP_VERSION_MAJOR 0)
 set(PSLP_VERSION_MINOR 1)
-set(PSLP_VERSION_PATCH 0)
+set(PSLP_VERSION_PATCH 1)
 set(PSLP_VERSION "${PSLP_VERSION_MAJOR}.${PSLP_VERSION_MINOR}.${PSLP_VERSION_PATCH}")
 add_compile_definitions(PSLP_VERSION="${PSLP_VERSION}")
 
@@ -55,6 +55,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 file(GLOB CORE_SOURCES CONFIGURE_DEPENDS
     src/core/*.c
     src/explorers/*.c
+    src/explorers/dton/*.c
 )
 
 # distinguish between public and private headers
@@ -67,6 +68,7 @@ file(GLOB PRIVATE_HEADERS CONFIGURE_DEPENDS
     include/core/*.h
     include/data_structures/*.h
     include/explorers/*.h
+    include/explorers/dton/*.h
 )
 
 
@@ -92,6 +94,7 @@ target_include_directories(PSLP
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/core>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/data_structures>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/explorers>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/explorers/dton>
 )
 
 # Common compile options
@@ -151,6 +154,7 @@ if(PSLP_BUILD_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/include/core
       ${CMAKE_CURRENT_SOURCE_DIR}/include/data_structures
       ${CMAKE_CURRENT_SOURCE_DIR}/include/explorers
+      ${CMAKE_CURRENT_SOURCE_DIR}/include/explorers/dton
       ${CMAKE_CURRENT_SOURCE_DIR}/include/PSLP
   )
 

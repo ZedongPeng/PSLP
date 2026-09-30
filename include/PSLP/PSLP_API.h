@@ -59,7 +59,6 @@ extern "C"
         bool finite_bound_tightening;
         bool dual_fix;
         bool relax_bounds;
-        int max_shift;
         double max_time;
         bool verbose;
     } Settings;

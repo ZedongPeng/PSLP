@@ -413,7 +413,8 @@ static char *test_map_dton_free_var()
                                          lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
     run_presolver(presolver);
 
-    double x_red[] = {0.83333333, 0.16666667, 0., 0.};
+    // x2 = (x1 + 1)/2 is eliminated: the reduced columns are x1, x3, x4, x5
+    double x_red[] = {0.66666667, 0.16666667, 0., 0.};
     double y_red[] = {1., -0.33333333};
     double z_red[] = {0., 0., 1., 0.33333333};
 
@@ -660,7 +661,7 @@ static char *test_map_after_free_reduced_problem()
     run_presolver(presolver);
     free_presolver_reduced_problem(presolver);
 
-    double x_red_correct[] = {0.83333333, 0.16666667, 0., 0.};
+    double x_red_correct[] = {0.66666667, 0.16666667, 0., 0.}; // x2 eliminated
     double y_red_correct[] = {1., -0.33333333};
     double x[] = {0.66666667, 0.83333333, 0.16666667, 0., 0.};
     double y[] = {1., 0.33333333, -0.33333333};
