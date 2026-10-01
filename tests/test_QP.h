@@ -60,6 +60,10 @@
             coefficient and other rows (ADDED_ROWS enters its multiplier)
    Test 22: chain of two substitutions of diagonal-only variables in one
             round (P_tt accumulates, multipliers replay deepest first)
+   Test 23: coupled dual fix of a column that is empty in A (CVXQP-like): the
+            derivative is nonnegative over the box, fixed at lb; a coupled
+            column with an undetermined sign stays
+   Test 24: coupled dual fix at ub of a column with down-locks only
 */
 
 #define QP_TOL 1e-8
@@ -1317,6 +1321,140 @@ static char *test_22_qp()
     return 0;
 }
 
+/*  Coupled dual fix of columns that are empty in A (CVXQP-like).
+    min. x0^2 + x0 x1 + x1^2 + x1 x3 + x3^2 - 5.25 x1 - x2 - 5 x3
+    s.t. x1 + x2 <= 4, 0.25 <= x0, x1, x3 <= 10, 0 <= x2 <= 10
+    Only dual fix is enabled. x0 is empty in A and its derivative
+    2 x0 + x1 >= 0.75 over the box, so x0 = 0.25: c1 = -5.25 + 0.25 = -5,
+    offset 0.0625. x3 is empty in A too but -5 + x1 + 2 x3 changes sign over the
+    box, so it stays; x1 has an up-lock and -5 + x3 + 2 x1 can be negative.
+    Reduced (x1, x2, x3): solution (1, 3, 2) with y = -1. Postsolve:
+    z0 = 2 x0 + x1 = 1.5. */
+static char *test_23_qp()
+{
+    double Ax[] = {1, 1};
+    int Ai[] = {1, 2};
+    int Ap[] = {0, 2};
+    int n_rows = 1, n_cols = 4;
+    double lhs[] = {-INF};
+    double rhs[] = {4};
+    double lbs[] = {0.25, 0.25, 0, 0.25};
+    double ubs[] = {10, 10, 10, 10};
+    double c[] = {0, -5.25, -1, -5};
+    double Px[] = {2, 1, 1, 2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1, 3, 1, 3};
+    int Pp[] = {0, 2, 5, 5, 7};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dual_fix = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 7, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    const int *col_map = presolver->prob->constraints->state->work->mappings->cols;
+    mu_assert("x0 fixed", col_map[0] == -1 && col_map[1] == 0 && col_map[2] == 1 &&
+                              col_map[3] == 2);
+    mu_assert("reduced dims", red->m == 1 && red->n == 3 && red->nnz == 2);
+    double Px_correct[] = {2, 1, 1, 2};
+    int Pi_correct[] = {0, 2, 0, 2};
+    int Pp_correct[] = {0, 2, 2, 4};
+    mu_assert("reduced P", red->Pnnz == 4 &&
+                               ARRAYS_EQUAL_DOUBLE(Px_correct, red->Px, 4) &&
+                               ARRAYS_EQUAL_INT(Pi_correct, red->Pi, 4) &&
+                               ARRAYS_EQUAL_INT(Pp_correct, red->Pp, 4));
+    double c_correct[] = {-5, -1, -5};
+    mu_assert("reduced c", ARRAYS_EQUAL_DOUBLE(c_correct, red->c, 3));
+    mu_assert("reduced offset", red->obj_offset == 0.0625);
+
+    double x[] = {1, 3, 2};
+    double y[] = {-1};
+    double z[] = {0, 0, 0};
+    postsolve(presolver, x, y, z);
+
+    double correct_x[] = {0.25, 1, 3, 2};
+    double correct_y[] = {-1};
+    double correct_z[] = {1.5, 0, 0, 0};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
+/*  Coupled dual fix at the upper bound.
+    min. x0^2 + x0 x1 + x1^2 - 4 x0 - 3 x1 - x2
+    s.t. -x0 + x1 + x2 <= 2, x1 + 2 x2 <= 6, 0 <= x0, x1 <= 1, 0 <= x2 <= 10
+    Only dual fix is enabled. x0 has a down-lock only and its derivative
+    -4 + x1 + 2 x0 <= -1 over the box, so x0 = 1: c1 = -3 + 1 = -2,
+    offset -4 + 1 = -3, first row x1 + x2 <= 3. x1 (up-locks, -2 + 2 x1 can
+    be negative) and x2 stay. Reduced solution (0.5, 2.5) with y = (-1, 0).
+    Postsolve: z0 = -4 + 2 x0 + x1 + y0 = -2.5. */
+static char *test_24_qp()
+{
+    double Ax[] = {-1, 1, 1, 1, 2};
+    int Ai[] = {0, 1, 2, 1, 2};
+    int Ap[] = {0, 3, 5};
+    int n_rows = 2, n_cols = 3;
+    double lhs[] = {-INF, -INF};
+    double rhs[] = {2, 6};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {1, 1, 10};
+    double c[] = {-4, -3, -1};
+    double Px[] = {2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1};
+    int Pp[] = {0, 2, 4, 4};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dual_fix = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 5, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    const int *col_map = presolver->prob->constraints->state->work->mappings->cols;
+    mu_assert("x0 fixed", col_map[0] == -1 && col_map[1] == 0 && col_map[2] == 1);
+    mu_assert("reduced dims", red->m == 2 && red->n == 2 && red->nnz == 4);
+    mu_assert("reduced P", red->Pnnz == 1 && red->Px[0] == 2.0 && red->Pi[0] == 0);
+    mu_assert("reduced c", red->c[0] == -2.0 && red->c[1] == -1.0);
+    mu_assert("reduced offset", red->obj_offset == -3.0);
+    mu_assert("reduced rhs", red->rhs[0] == 3.0 && red->rhs[1] == 6.0);
+
+    double x[] = {0.5, 2.5};
+    double y[] = {-1, 0};
+    double z[] = {0, 0};
+    postsolve(presolver, x, y, z);
+
+    double correct_x[] = {1, 0.5, 2.5};
+    double correct_y[] = {-1, 0};
+    double correct_z[] = {-2.5, 0, 0};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
@@ -1339,6 +1477,8 @@ static const char *all_tests_qp()
     mu_run_test(test_20_qp, counter_qp);
     mu_run_test(test_21_qp, counter_qp);
     mu_run_test(test_22_qp, counter_qp);
+    mu_run_test(test_23_qp, counter_qp);
+    mu_run_test(test_24_qp, counter_qp);
     return 0;
 }
 

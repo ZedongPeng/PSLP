@@ -38,7 +38,8 @@ PresolveStatus fix_col(Problem *prob, int col, double val)
     ColTag *col_tag = constraints->col_tags + col;
     bool is_ub_inf = HAS_TAG(*col_tag, C_TAG_UB_INF);
     bool is_lb_inf = HAS_TAG(*col_tag, C_TAG_LB_INF);
-    assert(constraints->state->col_sizes[col] > 0);
+    /* an empty column in P is fixed here by the dual fix */
+    assert(data->col_sizes[col] > 0 || col_in_P(data, col));
     assert(!HAS_TAG(*col_tag, C_TAG_INACTIVE));
 
     if ((!is_ub_inf && val >= old_ub + FEAS_TOL) ||
