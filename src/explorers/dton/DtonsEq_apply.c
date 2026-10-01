@@ -340,10 +340,10 @@ void dton_apply(Problem *prob, DtonWorkspace *dton_work, int *deferred,
     for (int ii = 0; ii < substs->n_recs; ++ii)
     {
         const DtonSubst *rec = substs->recs + substs->order[ii];
-        if (col_in_P(constraints->state, rec->k))
+        if (rec->Pkk != 0.0)
         {
             sub_diag_var_in_obj_dton(prob, rec->k, rec->target, rec->mult,
-                                     rec->shift);
+                                     rec->shift, rec->Pkk);
         }
         else if (obj->c[rec->k] != 0.0)
         {

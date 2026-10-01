@@ -144,11 +144,11 @@ bool dton_claim(Problem *prob, DtonWorkspace *dton_work, int *deferred,
         bool in_P0 = col_in_P(state, col0);
         bool in_P1 = col_in_P(state, col1);
         bool diag0 = false, diag1 = false;
-        double Pkk;
+        double Pkk[2] = {0.0, 0.0};
         if (in_P0 && in_P1)
         {
-            diag0 = diagonal_only_P_entry(P, P_row_sizes, col0, &Pkk);
-            diag1 = diagonal_only_P_entry(P, P_row_sizes, col1, &Pkk);
+            diag0 = diagonal_only_P_entry(P, P_row_sizes, col0, Pkk);
+            diag1 = diagonal_only_P_entry(P, P_row_sizes, col1, Pkk + 1);
         }
         subst = dton_choose_subst_qp(vals, col_sizes[col0], col_sizes[col1], in_P0,
                                      in_P1, diag0, diag1);
@@ -176,6 +176,7 @@ bool dton_claim(Problem *prob, DtonWorkspace *dton_work, int *deferred,
         rec->aij = vals[stay];
         rec->dir_mult = -rec->aij / rec->aik;
         rec->dir_shift = rhs[i] / rec->aik;
+        rec->Pkk = Pkk[subst]; /* set by diagonal_only_P_entry for a P column */
         dton_work->substs.col_subst[k] = dton_work->substs.n_recs++;
     }
     return true;
@@ -338,9 +339,7 @@ void dton_record(Problem *prob, DtonWorkspace *dton_work)
     Constraints *constraints = prob->constraints;
     const Matrix *AT = constraints->AT; /* pre-round transpose */
     const double *c = prob->obj->c;     /* pre-round objective */
-    const Matrix *P = prob->obj->P;     /* pre-round P */
-    const State *state = constraints->state;
-    PostsolveInfo *info = state->postsolve_info;
+    PostsolveInfo *info = constraints->state->postsolve_info;
 
     /* ascending depth: order lists the substitutions by descending depth */
     for (int ii = dton_work->substs.n_recs - 1; ii >= 0; --ii)
@@ -362,13 +361,9 @@ void dton_record(Problem *prob, DtonWorkspace *dton_work)
         }
 #endif
 
-        if (col_in_P(state, k))
+        if (rec->Pkk != 0.0)
         {
-            double Pkk;
-            bool diagonal = diagonal_only_P_entry(P, state->P_row_sizes, k, &Pkk);
-            assert(diagonal);
-            (void) diagonal;
-            save_retrieval_deleted_row_zk(info, i, k, aik, Pkk);
+            save_retrieval_deleted_row_zk(info, i, k, aik, rec->Pkk);
         }
         save_retrieval_added_rows(info, i, rows, col_vals, (size_t) len, aik);
         save_retrieval_sub_col_dton(info, k, rec->target, rec->mult, rec->shift);

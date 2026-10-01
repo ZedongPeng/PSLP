@@ -215,15 +215,14 @@ void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
     obj->c[subst] = 0.0;
 }
 
-void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift)
+void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift,
+                              double Pkk)
 {
     Objective *obj = prob->obj;
     Matrix *P = obj->P;
     int *P_row_sizes = prob->constraints->state->P_row_sizes;
-    double Pkk;
-    bool diagonal = diagonal_only_P_entry(P, P_row_sizes, k, &Pkk);
-    assert(diagonal);
-    (void) diagonal;
+    assert(P_row_sizes[k] == 1 && P->i[P->p[k].start] == k &&
+           P->x[P->p[k].start] == Pkk);
 
     /* (1/2) P_kk x_k^2 + c_k x_k with x_k = shift + mult x_t */
     obj->c[t] += mult * (obj->c[k] + Pkk * shift);

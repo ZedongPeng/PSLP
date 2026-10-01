@@ -87,12 +87,12 @@ bool P_row_has_diagonal(const struct Matrix *P, const int *P_row_sizes, int k);
 void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
                          double shift);
 
-/* Substitutes x_k = shift + mult * x_t in the objective when row k of P is a
-   positive diagonal alone (diagonal_only_P_entry) and t has a diagonal:
+/* Substitutes x_k = shift + mult * x_t in the objective when row k of P is the
+   positive diagonal Pkk alone (diagonal_only_P_entry) and t has a diagonal:
      c_t += mult (c_k + P_kk shift),  offset += shift (c_k + (1/2) P_kk shift),
      P_tt += mult^2 P_kk,
    then empties row k of P. The caller marks it inactive. */
-void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult,
-                              double shift);
+void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift,
+                              double Pkk);
 
 #endif // CORE_PROBLEM_H
