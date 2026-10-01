@@ -111,15 +111,12 @@ static inline PresolveStatus _simple_dual_fix(Problem *prob, double ck, double l
 }
 
 /* Dual fix for a variable k in P with diagonal Pkk > 0. The derivative of the
-   objective in xk is
-       gk(x) = ck + sum_{l != k} Pkl xl + Pkk xk,
-   and [gmin, gmax] bounds the first two terms over the bounds of the other
-   variables. Without down-locks and with gmin + Pkk lb >= 0 the objective is
-   non-decreasing in xk on [lb, inf) whatever the others are, so some optimal
-   solution has xk = lb; symmetrically without up-locks. For a diagonal-only
-   row gmin = gmax = ck, and without any locks xk = clip(-ck / Pkk, lb, ub).
-   Tightening the bound to an interior minimiser is left out: it removes
-   nothing by itself and puts a degenerate active bound at the optimum. */
+   objective in xk is ck + sum_{l != k} Pkl xl + Pkk xk, and [gmin, gmax]
+   bounds the first two terms over the bounds of the other variables. Without
+   down-locks and with gmin + Pkk lb >= 0 the objective never decreases in xk
+   above lb, so xk = lb; symmetrically for ub. A diagonal-only row without
+   locks is fixed at clip(-ck / Pkk, lb, ub). No tightening to an interior
+   minimiser: it removes nothing and makes the optimum degenerate. */
 static inline void P_dual_fix(Problem *prob, int col)
 {
     const Constraints *constraints = prob->constraints;
