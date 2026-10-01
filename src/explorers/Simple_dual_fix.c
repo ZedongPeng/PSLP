@@ -124,18 +124,19 @@ static inline void P_dual_fix(Problem *prob, int col)
 {
     const Constraints *constraints = prob->constraints;
     const Bound *bounds = constraints->bounds;
-    const ColTag *col_tags = constraints->col_tags;
     const Matrix *P = prob->obj->P;
+    ColTag col_tag = constraints->col_tags[col];
     Lock lock = constraints->state->col_locks[col];
-    bool lb_inf = HAS_TAG(col_tags[col], C_TAG_LB_INF);
-    bool ub_inf = HAS_TAG(col_tags[col], C_TAG_UB_INF);
+    bool lb_inf = HAS_TAG(col_tag, C_TAG_LB_INF);
+    bool ub_inf = HAS_TAG(col_tag, C_TAG_UB_INF);
     double lb = bounds[col].lb;
     double ub = bounds[col].ub;
-    assert(!HAS_TAG(col_tags[col], C_TAG_INACTIVE));
+    assert(!HAS_TAG(col_tag, C_TAG_INACTIVE));
     assert(lock.down == 0 || lock.up == 0);
 
+    // an infinite bound is stored as +-INF, so gmin / gmax become infinite
+    // when they depend on one and the tests below fail by themselves
     double Pkk = 0.0, gmin = prob->obj->c[col], gmax = gmin;
-    bool gmin_inf = false, gmax_inf = false;
     for (int jj = P->p[col].start; jj < P->p[col].end; ++jj)
     {
         int l = P->i[jj];
@@ -145,19 +146,8 @@ static inline void P_dual_fix(Problem *prob, int col)
             Pkk = Pkl;
             continue;
         }
-        // Pkl xl ranges over [Pkl lb, Pkl ub] or [Pkl ub, Pkl lb]
-        bool lo_inf = HAS_TAG(col_tags[l], Pkl > 0 ? C_TAG_LB_INF : C_TAG_UB_INF);
-        bool hi_inf = HAS_TAG(col_tags[l], Pkl > 0 ? C_TAG_UB_INF : C_TAG_LB_INF);
-        gmin_inf |= lo_inf;
-        gmax_inf |= hi_inf;
-        if (!lo_inf)
-        {
-            gmin += Pkl * (Pkl > 0 ? bounds[l].lb : bounds[l].ub);
-        }
-        if (!hi_inf)
-        {
-            gmax += Pkl * (Pkl > 0 ? bounds[l].ub : bounds[l].lb);
-        }
+        gmin += MIN(Pkl * bounds[l].lb, Pkl * bounds[l].ub);
+        gmax += MAX(Pkl * bounds[l].lb, Pkl * bounds[l].ub);
     }
     if (Pkk <= 0.0)
     {
@@ -165,7 +155,7 @@ static inline void P_dual_fix(Problem *prob, int col)
     }
 
     // diagonal-only row without locks: xk = clip(x*, lb, ub)
-    if (lock.down == 0 && lock.up == 0 && P->p[col].end - P->p[col].start == 1)
+    if (lock.down == 0 && lock.up == 0 && constraints->state->P_row_sizes[col] == 1)
     {
         double val = -prob->obj->c[col] / Pkk;
         if (IS_HUGE(val))
@@ -185,14 +175,14 @@ static inline void P_dual_fix(Problem *prob, int col)
     }
 
     // no down-locks: xk <= lb whenever gk >= 0 on [lb, inf)
-    if (lock.down == 0 && !lb_inf && !gmin_inf && gmin + Pkk * lb >= 0.0)
+    if (lock.down == 0 && !lb_inf && gmin + Pkk * lb >= 0.0)
     {
         fix_col(prob, col, lb);
         return;
     }
 
     // no up-locks: xk >= ub whenever gk <= 0 on (-inf, ub]
-    if (lock.up == 0 && !ub_inf && !gmax_inf && gmax + Pkk * ub <= 0.0)
+    if (lock.up == 0 && !ub_inf && gmax + Pkk * ub <= 0.0)
     {
         fix_col(prob, col, ub);
     }
