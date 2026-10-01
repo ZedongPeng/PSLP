@@ -23,12 +23,6 @@ with $P$ symmetric positive semidefinite ($P = 0$ for an LP).
 constraints and fixing variables etc. It is written in C99 and is lightweight with no external
 dependencies. Happy presolving!
 
-For QPs the presolver never creates fill-in in $P$. A variable that appears in $P$ is removed
-when its value is known (fixed by its bounds or by a singleton equality row) or when its row of
-$P$ holds only the diagonal (dual fixing, empty columns and doubleton equality rows). The other
-reductions that reason about the objective (singleton columns, parallel columns) only apply to
-variables that do not appear in $P$.
-
 ---
 ## Installation
 **PSLP** is built using CMake. If you wish to use **PSLP** in your own CMake-based project, a simple approach is to do as follows.
