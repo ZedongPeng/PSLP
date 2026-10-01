@@ -23,9 +23,6 @@ with $P$ symmetric positive semidefinite ($P = 0$ for an LP).
 constraints and fixing variables etc. It is written in C99 and is lightweight with no external
 dependencies. Happy presolving!
 
-For QPs the presolver never modifies $P$: a variable that appears in $P$ is kept in the
-reduced problem.
-
 ---
 ## Installation
 **PSLP** is built using CMake. If you wish to use **PSLP** in your own CMake-based project, a simple approach is to do as follows.
