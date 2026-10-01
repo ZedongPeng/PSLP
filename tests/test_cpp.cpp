@@ -63,7 +63,6 @@ int main()
     {
         Pp[i] = 1;
     }
-    stgs->dton_eq = false; // not supported for QPs yet
     Presolver *presolver_qp = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
                                             lbs, ubs, c, Px, Pi, Pp, 1, stgs);
     assert(presolver_qp != nullptr && "QP presolver initialization failed");
