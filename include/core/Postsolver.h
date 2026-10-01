@@ -391,25 +391,27 @@ static inline DeletedRowRecord decode_deleted_row(const int *indices,
     return r;
 }
 
-/* Saves what is needed to recover yi when singleton equality row i
-   (coefficient aik) fixed xk and xk appears in P. The multiplier
-   yi = (Px + c)_k / aik needs x, so yi is left at 0 by the DELETED_ROW record
-   and, once the FIXED_COL record (which holds row k of P) has recovered
-   zk = (Px + c)_k - sum_j ajk yj with yi = 0, this record moves the residual
-   into yi:
-       yi += zk / aik,   zk = 0.
-   It is saved before fix_col so that it is replayed after FIXED_COL.
-   * info->vals stores    [aik, dummy]
+/* Recovers yi when equality row i (coefficient aik) eliminated a column k that
+   appears in P. The multiplier needs the gradient at k, hence x, so the LP
+   records leave the P part out of yi. This record is saved before them,
+   replays after them and adds it:
+       yi += (zk + Pkk xk) / aik,   zk = 0.
+   For a fixed xk, FIXED_COL (which holds row k of P) has already put the P
+   part into zk and Pkk is 0. For an xk substituted by the doubleton
+   eliminator, SUB_COL_DTON leaves zk = 0 and Pkk is the diagonal that made up
+   row k of P.
+   * info->vals stores    [aik, Pkk]
    * info->indices stores [row, col]
 */
-void save_retrieval_deleted_row_zk(PostsolveInfo *info, int row, int col,
-                                   double aik);
+void save_retrieval_deleted_row_zk(PostsolveInfo *info, int row, int col, double aik,
+                                   double Pkk);
 
 typedef struct DeletedRowZkRecord
 {
     int row;
     int col;
     double aik;
+    double Pkk;
 } DeletedRowZkRecord;
 
 static inline DeletedRowZkRecord
@@ -418,10 +420,10 @@ decode_deleted_row_zk(const int *indices, const double *vals, int record_len)
     DeletedRowZkRecord r;
     assert(record_len == 2);
     (void) record_len; // only used by the assert
-    assert(vals[1] == DUMMY_VALUE);
     r.row = indices[0];
     r.col = indices[1];
     r.aik = vals[0];
+    r.Pkk = vals[1];
     return r;
 }
 

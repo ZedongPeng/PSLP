@@ -26,10 +26,10 @@ struct Matrix;
 
 /* Objective (1/2) x'Px + c'x + offset. P is the full symmetric matrix in
    CSR without extra row space. Fixing a variable removes its row and column
-   (fix_var_in_obj); no reduction creates fill-in in P (see col_in_P), the
-   only P variables that dual reductions may remove are those whose row holds
-   just a positive diagonal (see diagonal_only_P_entry). problem_clean drops
-   the rows of removed variables. For an LP, P has no entries. */
+   (fix_var_in_obj); no reduction creates fill-in in P (see col_in_P), and
+   dual reductions and the doubleton eliminator only remove P variables whose
+   row is a positive diagonal alone (see diagonal_only_P_entry). problem_clean
+   drops the rows of removed variables. For an LP, P has no entries. */
 typedef struct
 {
     double *c;
@@ -78,9 +78,20 @@ void mark_P_row_inactive(Problem *prob, int k);
 bool diagonal_only_P_entry(const struct Matrix *P, const int *P_row_sizes, int k,
                            double *Pkk);
 
+/* True if row k of P holds a diagonal entry. */
+bool P_row_has_diagonal(const struct Matrix *P, const int *P_row_sizes, int k);
+
 /* Substitutes x_subst = shift + mult * x_stay in the objective and zeroes
    c[subst]. */
 void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
                          double shift);
+
+/* Substitutes x_k = shift + mult * x_t in the objective when row k of P is the
+   positive diagonal Pkk alone (diagonal_only_P_entry) and t has a diagonal:
+     c_t += mult (c_k + P_kk shift),  offset += shift (c_k + (1/2) P_kk shift),
+     P_tt += mult^2 P_kk,
+   then empties row k of P. The caller marks it inactive. */
+void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift,
+                              double Pkk);
 
 #endif // CORE_PROBLEM_H

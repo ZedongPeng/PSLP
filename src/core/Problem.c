@@ -17,6 +17,7 @@
  */
 
 #include "Problem.h"
+#include "Binary_search.h"
 #include "Constraints.h"
 #include "Matrix.h"
 #include "Memory_wrapper.h"
@@ -115,6 +116,11 @@ bool diagonal_only_P_entry(const Matrix *P, const int *P_row_sizes, int k,
     return true;
 }
 
+bool P_row_has_diagonal(const Matrix *P, const int *P_row_sizes, int k)
+{
+    return sorted_find(P->i + P->p[k].start, P_row_sizes[k], k) >= 0;
+}
+
 void fix_var_in_obj(Problem *prob, int col, double value)
 {
     Objective *obj = prob->obj;
@@ -207,4 +213,29 @@ void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
     obj->c[stay] += mult * obj->c[subst];
     obj->offset += shift * obj->c[subst];
     obj->c[subst] = 0.0;
+}
+
+void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift,
+                              double Pkk)
+{
+    Objective *obj = prob->obj;
+    Matrix *P = obj->P;
+    int *P_row_sizes = prob->constraints->state->P_row_sizes;
+    assert(P_row_sizes[k] == 1 && P->i[P->p[k].start] == k &&
+           P->x[P->p[k].start] == Pkk);
+
+    /* (1/2) P_kk x_k^2 + c_k x_k with x_k = shift + mult x_t */
+    obj->c[t] += mult * (obj->c[k] + Pkk * shift);
+    obj->offset += shift * (obj->c[k] + 0.5 * Pkk * shift);
+    obj->c[k] = 0.0;
+
+    int start_t = P->p[t].start;
+    int rel = sorted_find(P->i + start_t, P_row_sizes[t], t);
+    assert(rel >= 0);
+    P->x[start_t + rel] += mult * mult * Pkk;
+
+    /* column k of P is the diagonal alone, so no other row changes */
+    P->p[k].end = P->p[k].start;
+    P->nnz -= 1;
+    P_row_sizes[k] = 0;
 }
