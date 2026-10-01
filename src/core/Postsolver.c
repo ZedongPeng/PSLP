@@ -167,10 +167,7 @@ static void retrieve_sub_col_dton(Solution *sol, const SubColDtonRecord *r)
     assert(sol->x[r->s] != COL_NOT_RETRIEVED);
 
     sol->x[r->k] = r->shift + r->mult * sol->x[r->s];
-
-    // the residual of the gradient at k that the LP records leave out of yi;
-    // DELETED_ROW_ZK moves it there (see save_retrieval_sub_col_dton_P)
-    sol->z[r->k] = (r->Pkk != 0.0) ? r->Pkk * sol->x[r->k] : 0.0;
+    sol->z[r->k] = 0.0;
 }
 
 static void retrieve_fix_col_inf(Solution *sol, const FixedColInfRecord *r)
@@ -288,14 +285,14 @@ void retrieve_deleted_row(Solution *sol, int row, double val)
     sol->y[row] = val;
 }
 
-// yi += zk / aik and zk = 0 after FIXED_COL has recovered zk with yi = 0, see
+// yi += (zk + Pkk xk) / aik and zk = 0 after the LP records, see
 // save_retrieval_deleted_row_zk
 static void retrieve_deleted_row_zk(Solution *sol, const DeletedRowZkRecord *r)
 {
     assert(sol->y[r->row] != ROW_NOT_RETRIEVED);
     assert(sol->x[r->col] != COL_NOT_RETRIEVED);
     assert(sol->z[r->col] != COL_NOT_RETRIEVED);
-    sol->y[r->row] += sol->z[r->col] / r->aik;
+    sol->y[r->row] += (sol->z[r->col] + r->Pkk * sol->x[r->col]) / r->aik;
     sol->z[r->col] = 0.0;
 }
 
@@ -749,22 +746,6 @@ void save_retrieval_sub_col_dton(PostsolveInfo *info, int k, int s, double mult,
     assert(info->indices->len == info->vals->len);
 }
 
-void save_retrieval_sub_col_dton_P(PostsolveInfo *info, int k, int s, double mult,
-                                   double shift, double Pkk)
-{
-    assert(Pkk > 0.0);
-    u16Vec_append(info->type, SUB_COL_DTON);
-    iVec_append(info->indices, k);
-    iVec_append(info->indices, s);
-    iVec_append(info->indices, DUMMY_VALUE);
-    dVec_append(info->vals, mult);
-    dVec_append(info->vals, shift);
-    dVec_append(info->vals, Pkk);
-    iVec_append(info->starts, (int) info->indices->len);
-    assert(info->starts->len == info->type->len + 1);
-    assert(info->indices->len == info->vals->len);
-}
-
 void save_retrieval_parallel_col(PostsolveInfo *info, double ub_j, double lb_j,
                                  double lb_k, double ub_k, double ratio, int j,
                                  int k, ColTag cTag_j, ColTag cTag_k)
@@ -795,13 +776,14 @@ void save_retrieval_deleted_row(PostsolveInfo *info, int row, double val)
     assert(info->vals->len == info->indices->len);
 }
 
-void save_retrieval_deleted_row_zk(PostsolveInfo *info, int row, int col, double aik)
+void save_retrieval_deleted_row_zk(PostsolveInfo *info, int row, int col, double aik,
+                                   double Pkk)
 {
     u16Vec_append(info->type, DELETED_ROW_ZK);
     iVec_append(info->indices, row);
     iVec_append(info->indices, col);
     dVec_append(info->vals, aik);
-    dVec_append(info->vals, DUMMY_VALUE);
+    dVec_append(info->vals, Pkk);
     iVec_append(info->starts, (int) info->indices->len);
     assert(info->starts->len == info->type->len + 1);
     assert(info->vals->len == info->indices->len);

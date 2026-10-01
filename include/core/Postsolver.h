@@ -304,35 +304,24 @@ static inline SubColRecord decode_sub_col(const int *indices, const double *vals
 void save_retrieval_sub_col_dton(PostsolveInfo *info, int k, int s, double mult,
                                  double shift);
 
-/* The same substitution of a column k whose row of P was the diagonal P_kk
-   alone. The LP records recover y_i without the P_kk x_k / a_ik term of the
-   gradient at k, so the postsolve parks that residual in z_k = P_kk x_k and a
-   DELETED_ROW_ZK record (saved before the LP records) moves it into y_i.
-   info->vals stores    [mult, shift, Pkk].
-   info->indices stores [k, s, dummy].
-*/
-void save_retrieval_sub_col_dton_P(PostsolveInfo *info, int k, int s, double mult,
-                                   double shift, double Pkk);
-
 typedef struct SubColDtonRecord
 {
     int k;
     int s;
     double mult;
     double shift;
-    double Pkk; /* 0 for an LP record */
 } SubColDtonRecord;
 
 static inline SubColDtonRecord
 decode_sub_col_dton(const int *indices, const double *vals, int record_len)
 {
     SubColDtonRecord r;
-    assert(record_len == 2 || record_len == 3);
+    assert(record_len == 2);
+    (void) record_len; // only used by the assert
     r.k = indices[0];
     r.s = indices[1];
     r.mult = vals[0];
     r.shift = vals[1];
-    r.Pkk = record_len == 3 ? vals[2] : 0.0;
     return r;
 }
 
@@ -404,23 +393,26 @@ static inline DeletedRowRecord decode_deleted_row(const int *indices,
 
 /* Saves what is needed to recover yi when equality row i (coefficient aik)
    removed xk and xk appears in P. The multiplier yi needs the P part of the
-   gradient at k, which needs x, so the LP records leave it out of yi and, once
-   the FIXED_COL record (which holds row k of P) or the SUB_COL_DTON record
-   (which holds P_kk) has recovered the residual zk, this record moves it
-   into yi:
-       yi += zk / aik,   zk = 0.
+   gradient at k, which needs x, so the LP records leave it out of yi and this
+   record, replayed after them, adds it:
+       yi += (zk + Pkk xk) / aik,   zk = 0.
+   A fixed xk has the whole P part in zk, recovered by the FIXED_COL record
+   (which holds row k of P) with yi = 0, and Pkk is 0 here. An xk substituted
+   by the doubleton eliminator had a diagonal-only row of P; SUB_COL_DTON
+   leaves zk = 0 and Pkk carries the diagonal.
    It is saved before the LP records so that it is replayed after them.
-   * info->vals stores    [aik, dummy]
+   * info->vals stores    [aik, Pkk]
    * info->indices stores [row, col]
 */
-void save_retrieval_deleted_row_zk(PostsolveInfo *info, int row, int col,
-                                   double aik);
+void save_retrieval_deleted_row_zk(PostsolveInfo *info, int row, int col, double aik,
+                                   double Pkk);
 
 typedef struct DeletedRowZkRecord
 {
     int row;
     int col;
     double aik;
+    double Pkk;
 } DeletedRowZkRecord;
 
 static inline DeletedRowZkRecord
@@ -429,10 +421,10 @@ decode_deleted_row_zk(const int *indices, const double *vals, int record_len)
     DeletedRowZkRecord r;
     assert(record_len == 2);
     (void) record_len; // only used by the assert
-    assert(vals[1] == DUMMY_VALUE);
     r.row = indices[0];
     r.col = indices[1];
     r.aik = vals[0];
+    r.Pkk = vals[1];
     return r;
 }
 

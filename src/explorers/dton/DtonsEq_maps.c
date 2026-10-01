@@ -331,8 +331,8 @@ PresolveStatus dton_transfer_bounds(Problem *prob, DtonWorkspace *dton_work)
    where the sum includes the owner rows whose stay column is k. Those records
    are deeper, so the columns are emitted by ascending depth and replayed
    deepest first. A column in P (row k of P is the diagonal P_kk alone) adds
-   P_kk x_k / a_ik to y_i: SUB_COL_DTON carries P_kk and a DELETED_ROW_ZK
-   record saved first, hence replayed last, moves the term from z_k into y_i. */
+   P_kk x_k / a_ik to y_i through a DELETED_ROW_ZK record, saved first and
+   hence replayed last. */
 void dton_record(Problem *prob, DtonWorkspace *dton_work)
 {
     Constraints *constraints = prob->constraints;
@@ -362,25 +362,16 @@ void dton_record(Problem *prob, DtonWorkspace *dton_work)
         }
 #endif
 
-        double Pkk = 0.0;
-        bool k_in_P = col_in_P(state, k);
-        if (k_in_P)
+        if (col_in_P(state, k))
         {
+            double Pkk;
             bool diagonal = diagonal_only_P_entry(P, state->P_row_sizes, k, &Pkk);
             assert(diagonal);
             (void) diagonal;
-            save_retrieval_deleted_row_zk(info, i, k, aik);
+            save_retrieval_deleted_row_zk(info, i, k, aik, Pkk);
         }
         save_retrieval_added_rows(info, i, rows, col_vals, (size_t) len, aik);
-        if (k_in_P)
-        {
-            save_retrieval_sub_col_dton_P(info, k, rec->target, rec->mult,
-                                          rec->shift, Pkk);
-        }
-        else
-        {
-            save_retrieval_sub_col_dton(info, k, rec->target, rec->mult, rec->shift);
-        }
+        save_retrieval_sub_col_dton(info, k, rec->target, rec->mult, rec->shift);
         save_retrieval_deleted_row(info, i, c[k] / aik);
     }
 }
