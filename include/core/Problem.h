@@ -26,11 +26,10 @@ struct Matrix;
 
 /* Objective (1/2) x'Px + c'x + offset. P is the full symmetric matrix in
    CSR without extra row space. Fixing a variable removes its row and column
-   (fix_var_in_obj); no reduction creates fill-in in P (see col_in_P), the
-   only P variables that dual reductions or substitutions may remove are those
-   whose row holds just a positive diagonal (see diagonal_only_P_entry and
-   sub_diag_var_in_obj_dton). problem_clean drops
-   the rows of removed variables. For an LP, P has no entries. */
+   (fix_var_in_obj); no reduction creates fill-in in P (see col_in_P), and
+   dual reductions and the doubleton eliminator only remove P variables whose
+   row is a positive diagonal alone (see diagonal_only_P_entry). problem_clean
+   drops the rows of removed variables. For an LP, P has no entries. */
 typedef struct
 {
     double *c;

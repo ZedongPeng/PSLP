@@ -391,14 +391,15 @@ static inline DeletedRowRecord decode_deleted_row(const int *indices,
     return r;
 }
 
-/* Saves what is needed to recover yi when equality row i (coefficient aik)
-   removed xk and xk appears in P. The multiplier yi needs the P part of the
-   gradient at k, which needs x, so the LP records leave it out and this record,
-   saved before them and hence replayed after them, adds it:
+/* Recovers yi when equality row i (coefficient aik) eliminated a column k that
+   appears in P. The multiplier needs the gradient at k, hence x, so the LP
+   records leave the P part out of yi. This record is saved before them,
+   replays after them and adds it:
        yi += (zk + Pkk xk) / aik,   zk = 0.
-   For a fixed xk the FIXED_COL record (which holds row k of P) has put the
-   whole P part into zk and Pkk is 0; for an xk substituted by the doubleton
-   eliminator SUB_COL_DTON leaves zk = 0 and Pkk is its diagonal-only row of P.
+   For a fixed xk, FIXED_COL (which holds row k of P) has already put the P
+   part into zk and Pkk is 0. For an xk substituted by the doubleton
+   eliminator, SUB_COL_DTON leaves zk = 0 and Pkk is the diagonal that made up
+   row k of P.
    * info->vals stores    [aik, Pkk]
    * info->indices stores [row, col]
 */
