@@ -304,24 +304,35 @@ static inline SubColRecord decode_sub_col(const int *indices, const double *vals
 void save_retrieval_sub_col_dton(PostsolveInfo *info, int k, int s, double mult,
                                  double shift);
 
+/* The same substitution of a column k whose row of P was the diagonal P_kk
+   alone. The LP records recover y_i without the P_kk x_k / a_ik term of the
+   gradient at k, so the postsolve parks that residual in z_k = P_kk x_k and a
+   DELETED_ROW_ZK record (saved before the LP records) moves it into y_i.
+   info->vals stores    [mult, shift, Pkk].
+   info->indices stores [k, s, dummy].
+*/
+void save_retrieval_sub_col_dton_P(PostsolveInfo *info, int k, int s, double mult,
+                                   double shift, double Pkk);
+
 typedef struct SubColDtonRecord
 {
     int k;
     int s;
     double mult;
     double shift;
+    double Pkk; /* 0 for an LP record */
 } SubColDtonRecord;
 
 static inline SubColDtonRecord
 decode_sub_col_dton(const int *indices, const double *vals, int record_len)
 {
     SubColDtonRecord r;
-    assert(record_len == 2);
-    (void) record_len; // only used by the assert
+    assert(record_len == 2 || record_len == 3);
     r.k = indices[0];
     r.s = indices[1];
     r.mult = vals[0];
     r.shift = vals[1];
+    r.Pkk = record_len == 3 ? vals[2] : 0.0;
     return r;
 }
 
@@ -391,14 +402,14 @@ static inline DeletedRowRecord decode_deleted_row(const int *indices,
     return r;
 }
 
-/* Saves what is needed to recover yi when singleton equality row i
-   (coefficient aik) fixed xk and xk appears in P. The multiplier
-   yi = (Px + c)_k / aik needs x, so yi is left at 0 by the DELETED_ROW record
-   and, once the FIXED_COL record (which holds row k of P) has recovered
-   zk = (Px + c)_k - sum_j ajk yj with yi = 0, this record moves the residual
+/* Saves what is needed to recover yi when equality row i (coefficient aik)
+   removed xk and xk appears in P. The multiplier yi needs the P part of the
+   gradient at k, which needs x, so the LP records leave it out of yi and, once
+   the FIXED_COL record (which holds row k of P) or the SUB_COL_DTON record
+   (which holds P_kk) has recovered the residual zk, this record moves it
    into yi:
        yi += zk / aik,   zk = 0.
-   It is saved before fix_col so that it is replayed after FIXED_COL.
+   It is saved before the LP records so that it is replayed after them.
    * info->vals stores    [aik, dummy]
    * info->indices stores [row, col]
 */

@@ -167,7 +167,10 @@ static void retrieve_sub_col_dton(Solution *sol, const SubColDtonRecord *r)
     assert(sol->x[r->s] != COL_NOT_RETRIEVED);
 
     sol->x[r->k] = r->shift + r->mult * sol->x[r->s];
-    sol->z[r->k] = 0.0;
+
+    // the residual of the gradient at k that the LP records leave out of yi;
+    // DELETED_ROW_ZK moves it there (see save_retrieval_sub_col_dton_P)
+    sol->z[r->k] = (r->Pkk != 0.0) ? r->Pkk * sol->x[r->k] : 0.0;
 }
 
 static void retrieve_fix_col_inf(Solution *sol, const FixedColInfRecord *r)
@@ -741,6 +744,22 @@ void save_retrieval_sub_col_dton(PostsolveInfo *info, int k, int s, double mult,
     iVec_append(info->indices, s);
     dVec_append(info->vals, mult);
     dVec_append(info->vals, shift);
+    iVec_append(info->starts, (int) info->indices->len);
+    assert(info->starts->len == info->type->len + 1);
+    assert(info->indices->len == info->vals->len);
+}
+
+void save_retrieval_sub_col_dton_P(PostsolveInfo *info, int k, int s, double mult,
+                                   double shift, double Pkk)
+{
+    assert(Pkk > 0.0);
+    u16Vec_append(info->type, SUB_COL_DTON);
+    iVec_append(info->indices, k);
+    iVec_append(info->indices, s);
+    iVec_append(info->indices, DUMMY_VALUE);
+    dVec_append(info->vals, mult);
+    dVec_append(info->vals, shift);
+    dVec_append(info->vals, Pkk);
     iVec_append(info->starts, (int) info->indices->len);
     assert(info->starts->len == info->type->len + 1);
     assert(info->indices->len == info->vals->len);
