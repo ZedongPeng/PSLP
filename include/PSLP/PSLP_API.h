@@ -135,10 +135,8 @@ extern "C"
        P = 0, i.e. an LP. The presolver keeps a deep copy and drops explicit
        zeros. The function returns NULL if Pnnz > 0 with a NULL array,
        Pnnz > INT_MAX, the CSR structure is invalid (see
-       matrix_valid_csr_input) or P is not exactly symmetric, and if
-       stgs->dton_eq is set with a non-empty P (doubleton equality rows are
-       not supported for QPs yet). Positive semidefiniteness is not
-       checked. */
+       matrix_valid_csr_input) or P is not exactly symmetric. Positive
+       semidefiniteness is not checked. */
     Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap,
                              size_t m, size_t n, size_t nnz, const double *lhs,
                              const double *rhs, const double *lbs, const double *ubs,

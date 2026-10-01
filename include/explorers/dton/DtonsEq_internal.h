@@ -132,6 +132,11 @@ void dton_workspace_init(DtonWorkspace *dton_work, struct Work *work);
 /* Which entry (0 or 1) of a doubleton equality row to substitute. */
 int dton_choose_subst(const double *row_vals, int col_size0, int col_size1);
 
+/* The same for a QP, where a column in P is never substituted. -1 when the
+   row cannot be eliminated. */
+int dton_choose_subst_qp(const double *row_vals, int col_size0, int col_size1,
+                         bool in_P0, bool in_P1);
+
 /* Phase 1: claims the substituted column of every eliminable row. False if
    the round's records could not be reserved. */
 bool dton_claim(struct Problem *prob, DtonWorkspace *dton_work, int *deferred,

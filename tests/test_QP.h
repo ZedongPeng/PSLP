@@ -4,6 +4,7 @@
 #include "Constraints.h"
 #include "CoreTransformations.h"
 #include "Debugger.h"
+#include "DtonsEq_internal.h"
 #include "Matrix.h"
 #include "Numerics.h"
 #include "PSLP_API.h"
@@ -24,7 +25,8 @@
 
 /* Tests for the quadratic objective term (1/2) x'Px. A variable that
    appears in P can be fixed (its row and column of P are folded away); it is
-   never substituted or dual-reduced.
+   never substituted or dual-reduced, so a doubleton equality row substitutes
+   the other column or stays.
    Test 1: structural validation of P in new_presolver
    Test 2: fix_col folds the coupling terms of P into c and removes the
            row/column of P
@@ -33,9 +35,13 @@
    Test 4: empty columns: fixed by the sign of c when absent from P, at
            clip(-c/Pkk) with only a diagonal, kept with off-diagonal entries
    Test 5: simple dual fix skips a variable that appears in P
+   Test 6: doubleton equality row substitutes the variable that is absent
+           from P
    Test 7: parallel columns are not merged when one of them appears in P
    Test 8: dual infeasibility ray after fixing a variable that appears in P
    Test 9: primal propagation fixing coupled variables (bound-change replay)
+   Test 10: doubleton equality row where the variable in P is a column
+            singleton (the other one is substituted and the singleton grows)
    Test 11: diagonal dual fix fixes variables whose minimiser is beyond the
             bound on the unlocked side
    Test 12: diagonal dual fix leaves a variable with an interior minimiser
@@ -44,8 +50,8 @@
    Test 16: primal infeasibility ray after fixing a variable that appears in P
    Test 17: diagonal-only empty columns with infinite bounds: clipped to a
             finite bound, inside with both bounds infinite, and c = 0
-   (doubleton equality rows are not supported for QPs yet; new_presolver
-   returns NULL if dton_eq is set)
+   Test 18: doubleton equality row with both variables in P stays
+   Test 19: dton_choose_subst_qp substitutes the column absent from P
 */
 
 #define QP_TOL 1e-8
@@ -64,7 +70,6 @@ static char *test_1_qp()
     double c[] = {1, 1};
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    stgs->dton_eq = false;
     Presolver *presolver;
 
     // asymmetric values
@@ -166,18 +171,6 @@ static char *test_1_qp()
         free_presolver(presolver);
     }
 
-    // dton_eq with a non-empty P is rejected
-    {
-        double Px[] = {2, 2};
-        int Pi[] = {0, 1};
-        int Pp[] = {0, 1, 2};
-        stgs->dton_eq = true;
-        presolver = new_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
-                                  Pp, 2, stgs);
-        mu_assert("dton_eq with P should be rejected", presolver == NULL);
-        stgs->dton_eq = false;
-    }
-
     // no P at all is an LP
     {
         presolver = new_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, NULL,
@@ -214,7 +207,6 @@ static char *test_2_qp()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    stgs->dton_eq = false;
     Presolver *presolver = new_presolver(Ax, Ai, Ap, 1, 3, 3, lhs, rhs, lbs, ubs, c,
                                          Px, Pi, Pp, 5, stgs);
     mu_assert("init", presolver != NULL);
@@ -429,7 +421,6 @@ static char *test_5_qp()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    stgs->dton_eq = false;
     Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
                                          lbs, ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
@@ -469,6 +460,69 @@ static char *test_5_qp()
     return 0;
 }
 
+/*  Doubleton equality row where one variable appears in P.
+    min. x0^2 - x2 s.t. x0 + x1 = 1, x0 + x2 <= 4, x1 + x2 <= 4, 0 <= x <= 10
+    Only dton_eq is enabled. x1 = 1 - x0 must be substituted (x0 is in P),
+    which transfers the bound x0 <= 1 and turns the third row into
+    -x0 + x2 <= 3. Reduced (x0, x2): min x0^2 - x2 s.t. x0 + x2 <= 4,
+    -x0 + x2 <= 3, solution (0.5, 3.5) with y = (0, -1). */
+static char *test_6_qp()
+{
+    double Ax[] = {1, 1, 1, 1, 1, 1};
+    int Ai[] = {0, 1, 0, 2, 1, 2};
+    int Ap[] = {0, 2, 4, 6};
+    int n_rows = 3, n_cols = 3;
+    double lhs[] = {1, -INF, -INF};
+    double rhs[] = {1, 4, 4};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {10, 10, 10};
+    double c[] = {0, 0, -1};
+    double Px[] = {2};
+    int Pi[] = {0};
+    int Pp[] = {0, 1, 1, 1};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dton_eq = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    const int *col_map = presolver->prob->constraints->state->work->mappings->cols;
+    mu_assert("x1 substituted, x0 kept",
+              col_map[0] == 0 && col_map[1] == -1 && col_map[2] == 1);
+    mu_assert("reduced dims", red->m == 2 && red->n == 2 && red->nnz == 4);
+    mu_assert("reduced P", red->Pnnz == 1 && red->Px[0] == 2.0 && red->Pi[0] == 0);
+    mu_assert("reduced c", red->c[0] == 0.0 && red->c[1] == -1.0);
+    mu_assert("reduced bounds", red->ubs[0] == 1.0);
+    double rhs_correct[] = {4, 3};
+    mu_assert("reduced rhs", ARRAYS_EQUAL_DOUBLE(rhs_correct, red->rhs, 2));
+
+    double x[] = {0.5, 3.5};
+    double y[] = {0, -1};
+    double z[] = {0, 0};
+    postsolve(presolver, x, y, z);
+
+    double correct_x[] = {0.5, 0.5, 3.5};
+    double correct_y[] = {1, 0, -1};
+    double correct_z[] = {0, 0, 0};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 /*  Parallel columns are not merged when one of them appears in P.
     min. x0^2 - x0 - 2 x1 s.t. x0 + 2 x1 + x2 <= 1, x0 + 2 x1 - x2 <= 1,
     -1 <= x <= 1. Columns 0 and 1 are parallel with c1 = 2 c0, so an LP
@@ -491,7 +545,6 @@ static char *test_7_qp()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    stgs->dton_eq = false;
     Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
                                          lbs, ubs, c, Px, Pi, Pp, 1, stgs);
     mu_assert("init", presolver != NULL);
@@ -627,6 +680,67 @@ static char *test_9_qp()
     return 0;
 }
 
+/*  Doubleton equality row whose variable in P is a column singleton, so the
+    other variable (which appears in more rows) must be substituted and the
+    singleton column gains entries (found on QPLIB_3708).
+    min. x0^2 - x2 s.t. x0 + x1 = 1, x1 + x2 <= 4, x1 - x2 <= 2, 0 <= x <= 10
+    Substituting x1 = 1 - x0 gives -x0 + x2 <= 3, -x0 - x2 <= 1, x0 <= 1;
+    solution (0.5, 3.5) with y = (-1, 0). */
+static char *test_10_qp()
+{
+    double Ax[] = {1, 1, 1, 1, 1, -1};
+    int Ai[] = {0, 1, 1, 2, 1, 2};
+    int Ap[] = {0, 2, 4, 6};
+    int n_rows = 3, n_cols = 3;
+    double lhs[] = {1, -INF, -INF};
+    double rhs[] = {1, 4, 2};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {10, 10, 10};
+    double c[] = {0, 0, -1};
+    double Px[] = {2};
+    int Pi[] = {0};
+    int Pp[] = {0, 1, 1, 1};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dton_eq = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    const int *col_map = presolver->prob->constraints->state->work->mappings->cols;
+    mu_assert("x1 substituted, x0 kept",
+              col_map[0] == 0 && col_map[1] == -1 && col_map[2] == 1);
+    mu_assert("reduced dims", red->m == 2 && red->n == 2 && red->nnz == 4);
+    mu_assert("reduced P", red->Pnnz == 1 && red->Px[0] == 2.0 && red->Pi[0] == 0);
+    double rhs_correct[] = {3, 1};
+    mu_assert("reduced rhs", ARRAYS_EQUAL_DOUBLE(rhs_correct, red->rhs, 2));
+
+    double x[] = {0.5, 3.5};
+    double y[] = {-1, 0};
+    double z[] = {0, 0};
+    postsolve(presolver, x, y, z);
+
+    double correct_x[] = {0.5, 0.5, 3.5};
+    double correct_y[] = {1, -1, 0};
+    double correct_z[] = {0, 0, 0};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 /*  Diagonal dual fix (PRIMALC-like structure).
     min. x0^2 + x1^2 + x0 + 4 x1 s.t. x0 + x1 <= 5, x0 + 2 x1 <= 8, 0 <= x <= 10
     No variable has down-locks and both minimisers -c0 / P00 = -0.5 and
@@ -649,7 +763,6 @@ static char *test_11_qp()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    stgs->dton_eq = false;
     Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
                                          lbs, ubs, c, Px, Pi, Pp, 2, stgs);
     mu_assert("init", presolver != NULL);
@@ -909,6 +1022,77 @@ static char *test_17_qp()
     return 0;
 }
 
+/*  Doubleton equality row with both variables in P. Neither can be
+    substituted, so the row stays on the worklist and the eliminator must
+    still terminate.
+    min. x0^2 + x1^2 - x2 s.t. x0 + x1 = 1, x1 + x2 <= 4, 0 <= x <= 10
+    Only dton_eq is enabled; nothing is reduced. Solution (0.75, 0.25, 3.75)
+    with y = (1.5, -1). */
+static char *test_18_qp()
+{
+    double Ax[] = {1, 1, 1, 1};
+    int Ai[] = {0, 1, 1, 2};
+    int Ap[] = {0, 2, 4};
+    int n_rows = 2, n_cols = 3;
+    double lhs[] = {1, -INF};
+    double rhs[] = {1, 4};
+    double lbs[] = {0, 0, 0};
+    double ubs[] = {10, 10, 10};
+    double c[] = {0, 0, -1};
+    double Px[] = {2, 2};
+    int Pi[] = {0, 1};
+    int Pp[] = {0, 1, 2, 2};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dton_eq = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 2, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == UNCHANGED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims",
+              red->m == 2 && red->n == 3 && red->nnz == 4 && red->Pnnz == 2);
+    mu_assert("row kept", red->lhs[0] == 1.0 && red->rhs[0] == 1.0);
+
+    double x[] = {0.75, 0.25, 3.75};
+    double y[] = {1.5, -1};
+    double z[] = {0, 0, 0};
+    postsolve(presolver, x, y, z);
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, x, presolver->sol->y, y,
+                                  presolver->sol->z, z, n_rows, n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
+/*  dton_choose_subst_qp: without P it is dton_choose_subst; otherwise the
+    column absent from P is substituted, whatever its coefficient, and a row
+    with both columns in P is left alone. */
+static char *test_19_qp()
+{
+    double v12[] = {1.0, 2.0};
+    mu_assert("no P: larger c1", dton_choose_subst_qp(v12, 3, 3, false, false) == 1);
+    mu_assert("c1 in P: c0", dton_choose_subst_qp(v12, 3, 3, false, true) == 0);
+    mu_assert("c0 in P: c1", dton_choose_subst_qp(v12, 1, 5, true, false) == 1);
+    mu_assert("both in P", dton_choose_subst_qp(v12, 3, 3, true, true) == -1);
+
+    double vtiny[] = {1e-9, 1.0};
+    mu_assert("forced tiny pivot",
+              dton_choose_subst_qp(vtiny, 3, 3, false, true) == 0);
+    mu_assert("unforced tiny pivot avoided",
+              dton_choose_subst_qp(vtiny, 3, 3, false, false) == 1);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
@@ -916,14 +1100,18 @@ static const char *all_tests_qp()
     mu_run_test(test_3_qp, counter_qp);
     mu_run_test(test_4_qp, counter_qp);
     mu_run_test(test_5_qp, counter_qp);
+    mu_run_test(test_6_qp, counter_qp);
     mu_run_test(test_7_qp, counter_qp);
     mu_run_test(test_8_qp, counter_qp);
     mu_run_test(test_9_qp, counter_qp);
+    mu_run_test(test_10_qp, counter_qp);
     mu_run_test(test_11_qp, counter_qp);
     mu_run_test(test_12_qp, counter_qp);
     mu_run_test(test_15_qp, counter_qp);
     mu_run_test(test_16_qp, counter_qp);
     mu_run_test(test_17_qp, counter_qp);
+    mu_run_test(test_18_qp, counter_qp);
+    mu_run_test(test_19_qp, counter_qp);
     return 0;
 }
 

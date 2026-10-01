@@ -227,12 +227,6 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
         return NULL;
     }
 
-    /* doubleton equality rows are not supported for QPs yet */
-    if (Pnnz > 0 && stgs->dton_eq)
-    {
-        return NULL;
-    }
-
     Timer timer;
     clock_gettime(CLOCK_MONOTONIC, &timer.start);
     Matrix *A = NULL, *AT = NULL, *P = NULL;
