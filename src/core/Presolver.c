@@ -211,8 +211,17 @@ void presolver_clean_up(clean_up_scope scope)
 Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t m,
                          size_t n, size_t nnz, const double *lhs, const double *rhs,
                          const double *lbs, const double *ubs, const double *c,
-                         const double *Px, const int *Pi, const int *Pp, size_t Pnnz,
                          const Settings *stgs)
+{
+    return new_presolver_qp(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs, c, NULL, NULL,
+                            NULL, 0, stgs);
+}
+
+Presolver *new_presolver_qp(const double *Ax, const int *Ai, const int *Ap, size_t m,
+                            size_t n, size_t nnz, const double *lhs,
+                            const double *rhs, const double *lbs, const double *ubs,
+                            const double *c, const double *Px, const int *Pi,
+                            const int *Pp, size_t Pnnz, const Settings *stgs)
 {
     /* the row pointers of the internal matrices are ints, so a valid CSR
        input has at most INT_MAX non-zeros */

@@ -48,10 +48,10 @@ After this, you should be able to import the public API using `#include "PSLP_AP
 The public C API is defined in the header file `PSLP_API.h`. The other files 
 in that folder contain some trivial public data structures. The API consists of three main operations:
 
-1. **Initialization** — performed using `new_presolver()`, which creates and
-   initializes internal data structures used by the presolver. Its last
-   arguments describe the quadratic objective matrix $P$ as the full symmetric
-   matrix in CSR form (pass `NULL`/`0` for an LP).
+1. **Initialization** — performed using `new_presolver()` for an LP or
+   `new_presolver_qp()` for a QP, which creates and initializes internal data
+   structures used by the presolver. The QP entry point takes the quadratic
+   objective matrix $P$ as the full symmetric matrix in CSR form.
 
 2. **Presolve** — performed using `run_presolver()`, which executes the presolve
    routines to reduce the problem. The reduced problem is available in the struct

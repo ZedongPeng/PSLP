@@ -128,20 +128,27 @@ extern "C"
        'free_presolver'. If the allocation fails, the function returns NULL.
        The matrix should be given in CSR form. Since the row pointers are ints,
        nnz must be at most INT_MAX; otherwise the function returns NULL.
-
-       (Px, Pi, Pp, Pnnz) is the n x n matrix P of the quadratic objective term
-       (1/2) x'Px in CSR form, given as the full symmetric matrix (both
-       triangles) with sorted column indices. Pp == NULL or Pnnz == 0 means
-       P = 0, i.e. an LP. The presolver keeps a deep copy and drops explicit
-       zeros. The function returns NULL if Pnnz > 0 with a NULL array,
-       Pnnz > INT_MAX, the CSR structure is invalid (see
-       matrix_valid_csr_input) or P is not exactly symmetric. Positive
-       semidefiniteness is not checked. */
+       Equivalent to new_presolver_qp with P = 0. */
     Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap,
                              size_t m, size_t n, size_t nnz, const double *lhs,
                              const double *rhs, const double *lbs, const double *ubs,
-                             const double *c, const double *Px, const int *Pi,
-                             const int *Pp, size_t Pnnz, const Settings *stgs);
+                             const double *c, const Settings *stgs);
+
+    /* Same as new_presolver with a quadratic objective term (1/2) x'Px.
+       (Px, Pi, Pp, Pnnz) is the n x n matrix P in CSR form, given as the full
+       symmetric matrix (both triangles) with sorted column indices. Pp == NULL
+       or Pnnz == 0 means P = 0, i.e. an LP. The presolver keeps a deep copy and
+       drops explicit zeros. The function returns NULL if Pnnz > 0 with a NULL
+       array, Pnnz > INT_MAX, the CSR structure is invalid (see
+       matrix_valid_csr_input) or P is not exactly symmetric. Positive
+       semidefiniteness is not checked. The LP fold is skipped when P has
+       entries. */
+    Presolver *new_presolver_qp(const double *Ax, const int *Ai, const int *Ap,
+                                size_t m, size_t n, size_t nnz, const double *lhs,
+                                const double *rhs, const double *lbs,
+                                const double *ubs, const double *c, const double *Px,
+                                const int *Pi, const int *Pp, size_t Pnnz,
+                                const Settings *stgs);
 
     /* Free the memory allocated for the presolver. */
     void free_presolver(Presolver *presolver);

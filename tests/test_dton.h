@@ -60,8 +60,8 @@ static char *test_dton_workspace()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs,
-                                         lbs, ubs, c, NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     Work *work = presolver->prob->constraints->state->work;
@@ -74,8 +74,8 @@ static char *test_dton_workspace()
     free_presolver(presolver);
 
     stgs->dton_eq = false;
-    presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c,
-                              NULL, NULL, NULL, 0, stgs);
+    presolver =
+        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
     work = presolver->prob->constraints->state->work;
     mu_assert("dton workspace must not be allocated", work->dton == NULL);
@@ -126,8 +126,8 @@ static char *test_dton_claim_conflict()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 3, 6, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 3, 6, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     DtonWorkspace *dton_work = dton_workspace_new(3, 3);
@@ -178,8 +178,8 @@ static char *test_dton_chain_depth2()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     DtonWorkspace *dton_work = dton_workspace_new(3, 4);
@@ -234,8 +234,8 @@ static char *test_dton_cycle_break()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 2, 2, 4, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 2, 2, 4, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     DtonWorkspace *dton_work = dton_workspace_new(2, 2);
@@ -284,8 +284,8 @@ static char *test_dton_pivot_large()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     DtonWorkspace *dton_work = dton_workspace_new(1, 2);
@@ -326,8 +326,8 @@ static char *test_dton_eliminate_isolated()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 2, 3, 4, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 2, 3, 4, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     Problem *prob = presolver->prob;
@@ -395,8 +395,8 @@ static char *test_dton_apply_substitution()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 4, 5, 10, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 4, 5, 10, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     Problem *prob = presolver->prob;
@@ -471,8 +471,8 @@ static char *test_dton_cancellation()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 5, 8, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 5, 8, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     Problem *prob = presolver->prob;
@@ -525,8 +525,8 @@ static char *test_dton_chain_empties_matrix()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     Problem *prob = presolver->prob;
@@ -582,8 +582,8 @@ static char *test_dton_chain_bounds_live()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     Problem *prob = presolver->prob;
@@ -628,8 +628,8 @@ static char *test_dton_chain_bounds_live_tags()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     Problem *prob = presolver->prob;
@@ -748,8 +748,8 @@ static char *dton_check_postsolve(double *Ax, int *Ai, int *Ap, int m, int n,
         stgs->dton_eq = true;
     }
     stgs->verbose = false;
-    Presolver *ps = new_presolver(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs, c, NULL,
-                                  NULL, NULL, 0, stgs);
+    Presolver *ps =
+        new_presolver(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs, c, stgs);
     if (ps == NULL)
     {
         return "presolver allocation failed";
@@ -923,8 +923,8 @@ static char *test_dton_free_subst()
     set_settings_false(stgs);
     stgs->dton_eq = true;
     stgs->verbose = false;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 4, 7, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 4, 7, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
     mu_assert("must reduce", run_presolver(presolver) == REDUCED);
     const PresolvedProblem *red = presolver->reduced_prob;
@@ -960,8 +960,8 @@ static char *test_dton_primal_ray()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs,
-                                         c, NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
     mu_assert("presolve reduces", run_presolver(presolver) == REDUCED);
     mu_assert("reduced dims",
@@ -1001,8 +1001,8 @@ static char *test_dton_dual_ray()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs,
-                                         c, NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
     mu_assert("presolve reduces", run_presolver(presolver) == REDUCED);
     mu_assert("reduced dims",
@@ -1036,8 +1036,8 @@ static Presolver *dton_new_presolver(double *Ax, int *Ai, int *Ap, int m, int n,
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs,
-                                         c, NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs, c, stgs);
     if (presolver != NULL)
     {
         Work *work = presolver->prob->constraints->state->work;
@@ -1418,8 +1418,8 @@ static char *test_dton_infeasible_transfer()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 3, 6, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 3, 6, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
     Constraints *constraints = presolver->prob->constraints;
 
@@ -1464,8 +1464,8 @@ static char *test_dton_infeasible_two_rows()
         {
             stgs->ston_cols = false;
         }
-        Presolver *presolver = new_presolver(Ax, Ai, Ap, 4, 4, 8, lhs, rhs, lbs, ubs,
-                                             c, NULL, NULL, NULL, 0, stgs);
+        Presolver *presolver =
+            new_presolver(Ax, Ai, Ap, 4, 4, 8, lhs, rhs, lbs, ubs, c, stgs);
         mu_assert("presolver allocation failed", presolver != NULL);
         mu_assert("infeasible", run_presolver(presolver) == INFEASIBLE);
         free_presolver(presolver);
@@ -1492,8 +1492,8 @@ static char *test_dton_infeasible_chain()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 3, 4, 6, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
     Constraints *constraints = presolver->prob->constraints;
 
@@ -1528,8 +1528,8 @@ static char *test_dton_e2e_full_settings()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    Presolver *presolver = new_presolver(Ax, Ai, Ap, 4, 5, 10, lhs, rhs, lbs, ubs, c,
-                                         NULL, NULL, NULL, 0, stgs);
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, 4, 5, 10, lhs, rhs, lbs, ubs, c, stgs);
     mu_assert("presolver allocation failed", presolver != NULL);
 
     PresolveStatus status = run_presolver(presolver);
