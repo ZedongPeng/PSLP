@@ -94,4 +94,27 @@ void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
 void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift,
                               double Pkk);
 
+/* Doubleton equality row aij xj + aik xk = rhs with both columns in P. True if
+   xk can be substituted out of the objective without fill-in in P although it
+   is coupled: row k of P holds a positive diagonal Pkk and the coupling Pkj
+   to j and nothing else, row j holds a diagonal, and the updated diagonal
+       P_jj + s^2 P_kk - 2 s P_kj,   s = aij / aik,
+   is nonnegative up to rounding (it is v'Pv for v = e_j - s e_k). An exact
+   cancellation means P v = 0, so row j then holds nothing but j and k; a
+   cancellation next to other entries of row j is rejected as rounding.
+   Returns the two entries of row k (0 when false). */
+bool coupled_dton_subst_ok(const struct Matrix *P, const int *P_row_sizes, int k,
+                           int j, double s, double *Pkk, double *Pkj);
+
+/* Substitutes x_k = shift + mult * x_j in the objective when row k of P is the
+   positive diagonal Pkk plus the coupling Pkj to j (coupled_dton_subst_ok):
+     c_j += mult (c_k + P_kk shift) + P_kj shift,
+     offset += shift (c_k + (1/2) P_kk shift),
+     P_jj += mult^2 P_kk + 2 mult P_kj,
+   removes P_jk from row j and empties row k of P (the caller marks it
+   inactive). A diagonal that cancels is removed when row j holds nothing
+   else. */
+void sub_coupled_var_in_obj_dton(Problem *prob, int k, int j, double mult,
+                                 double shift, double Pkk, double Pkj);
+
 #endif // CORE_PROBLEM_H
