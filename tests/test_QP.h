@@ -26,8 +26,9 @@
 /* Tests for the quadratic objective term (1/2) x'Px. A variable that
    appears in P can be fixed (its row and column of P are folded away). It is
    substituted through a doubleton equality row only into another variable in
-   P and only when its row of P is a positive diagonal alone; otherwise the
-   other column is substituted or the row stays.
+   P and only when its row of P holds nothing but a positive diagonal and the
+   other variable of the row (no fill-in in P); otherwise the other column is
+   substituted or the row stays.
    Test 1: structural validation of P in new_presolver
    Test 2: fix_col folds the coupling terms of P into c and removes the
            row/column of P
@@ -45,7 +46,8 @@
             singleton (the other one is substituted and the singleton grows)
    Test 11: diagonal dual fix fixes variables whose minimiser is beyond the
             bound on the unlocked side
-   Test 12: diagonal dual fix leaves a variable with an interior minimiser
+   Test 12: diagonal dual fix tightens the unlocked bound of a variable with
+            an interior minimiser (DUAL_BOUND_CHANGE replay)
    Test 15: two coupled variables fixed by two singleton equality rows, in
             both orders (the first multiplier needs the later-fixed neighbour)
    Test 16: primal infeasibility ray after fixing a variable that appears in P
@@ -53,9 +55,10 @@
             finite bound, inside with both bounds infinite, and c = 0
    Test 18: doubleton equality row with both variables diagonal in P
             substitutes the sparser one (P_tt grows, postsolve recovers y)
-   Test 19: dton_choose_subst_qp: the column absent from P, else the
-            diagonal-only one, else none
-   Test 20: doubleton equality row with both variables coupled in P stays
+   Test 19: dton_choose_subst_qp: the column absent from P, else the one
+            that can be substituted without fill-in, else none
+   Test 20: doubleton equality row with both variables coupled to a third
+            one in P stays
    Test 21: the diagonal-only variable is substituted with the smaller
             coefficient and other rows (ADDED_ROWS enters its multiplier)
    Test 22: chain of two substitutions of diagonal-only variables in one
@@ -64,6 +67,14 @@
             derivative is nonnegative over the box, fixed at lb; a coupled
             column with an undetermined sign stays
    Test 24: coupled dual fix at ub of a column with down-locks only
+   Test 25: doubleton equality row with both variables coupled to each other
+            only: the sparser one is substituted, P_jj, c_j and the offset
+            change, the multiplier needs P_kj x_j (DELETED_ROW_ZK)
+   Test 26: the same when the stay column keeps a coupling to a third variable
+   Test 27: dual bound tightening makes the only row redundant and the whole
+            problem disappears (HS21)
+   Test 28: coupled dual fix tightens the bound of a variable with
+            off-diagonal entries from the derivative range over the box
 */
 
 #define QP_TOL 1e-8
@@ -804,11 +815,13 @@ static char *test_11_qp()
     return 0;
 }
 
-/*  Diagonal dual fix with an interior minimiser: nothing happens.
+/*  Diagonal dual fix with an interior minimiser tightens the bound.
     min. x0^2 - 4 x0 + x1 - x2 s.t. x0 - x1 + x2 <= 3, 0 <= x <= 10
     Only dual fix is enabled. x0 has no down-locks and -c0 / P00 = 2 is inside
-    its bounds, so x0 is left alone (no bound tightening); x1 and x2 are
-    locked. Solution x = (1.5, 0, 1.5), y = -1, z = 0. */
+    its bounds, so every optimal solution has x0 <= 2 and the upper bound is
+    tightened to 2; x1 and x2 are locked. Solution x = (1.5, 0, 1.5), y = -1,
+    z = 0. A reduced solution that puts a multiplier on the implied bound
+    (not a KKT point, but solvers round) gets z0 = 0 back. */
 static char *test_12_qp()
 {
     double Ax[] = {1, -1, 1};
@@ -834,7 +847,8 @@ static char *test_12_qp()
 
     PresolvedProblem *red = presolver->reduced_prob;
     mu_assert("reduced dims", red->m == 1 && red->n == 3 && red->Pnnz == 1);
-    mu_assert("bounds unchanged", red->ubs[0] == 10.0 && red->lbs[0] == 0.0);
+    mu_assert("ub tightened", red->ubs[0] == 2.0 && red->lbs[0] == 0.0);
+    mu_assert("other bounds unchanged", red->ubs[1] == 10.0 && red->ubs[2] == 10.0);
 
     double x[] = {1.5, 0, 1.5};
     double y[] = {-1};
@@ -848,6 +862,19 @@ static char *test_12_qp()
                             ubs, c, Px, Pi, Pp, Pp[n_cols]);
     mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
                                   presolver->sol->z, QP_TOL));
+    free_presolver(presolver);
+
+    // a multiplier on the implied bound is dropped (x0 = 2 is not at the
+    // original bound 10)
+    presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs, lbs, ubs, c,
+                              Px, Pi, Pp, 1, stgs);
+    mu_assert("init 2", presolver != NULL);
+    run_presolver(presolver);
+    double x2[] = {2, 0, 1};
+    double z2[] = {-0.5, 0, 0};
+    postsolve(presolver, x2, y, z2);
+    mu_assert("implied bound multiplier dropped",
+              presolver->sol->x[0] == 2.0 && presolver->sol->z[0] == 0.0);
 
     PS_FREE(stgs);
     free_presolver(presolver);
@@ -1100,8 +1127,10 @@ static char *test_18_qp()
 
 /*  dton_choose_subst_qp: without P it is dton_choose_subst; with one column
     in P the other one is substituted, whatever its coefficient; with both in
-    P the diagonal-only column is substituted (dton_choose_subst decides when
-    both are), and a row without one is left alone. */
+    P the column that can be substituted without fill-in (sub0 / sub1: a
+    positive diagonal alone, or coupled to the other column only) is
+    substituted (dton_choose_subst decides when both can be), and a row
+    without one is left alone. */
 static char *test_19_qp()
 {
     double v12[] = {1.0, 2.0};
@@ -1113,11 +1142,11 @@ static char *test_19_qp()
               dton_choose_subst_qp(v12, 1, 5, true, false, true, false) == 1);
     mu_assert("both in P, coupled",
               dton_choose_subst_qp(v12, 3, 3, true, true, false, false) == -1);
-    mu_assert("both in P, c0 diagonal",
+    mu_assert("both in P, c0 fill-free",
               dton_choose_subst_qp(v12, 3, 3, true, true, true, false) == 0);
-    mu_assert("both in P, c1 diagonal",
+    mu_assert("both in P, c1 fill-free",
               dton_choose_subst_qp(v12, 3, 3, true, true, false, true) == 1);
-    mu_assert("both diagonal: larger c1",
+    mu_assert("both fill-free: larger c1",
               dton_choose_subst_qp(v12, 1, 5, true, true, true, true) == 1);
 
     double vtiny[] = {1e-9, 1.0};
@@ -1128,12 +1157,13 @@ static char *test_19_qp()
     return 0;
 }
 
-/*  Doubleton equality row with both variables coupled in P. Neither can be
-    substituted, so the row stays on the worklist and the eliminator must
-    still terminate.
-    min. x0^2 + x0 x1 + x1^2 - x2 s.t. x0 + x1 = 1, x1 + x2 <= 4, -10 <= x <= 10
-    Only dton_eq is enabled; nothing is reduced. Solution (1, 0, 4) with
-    y = (2, -1). */
+/*  Doubleton equality row with both variables coupled to a third variable
+    in P. Substituting either would create fill-in, so the row stays on the
+    worklist and the eliminator must still terminate.
+    min. x0^2 + x1^2 + x2^2 + x0 x2 + x1 x2 - x2
+    s.t. x0 + x1 = 1, x1 + x2 <= 4, -10 <= x <= 10
+    Only dton_eq is enabled; nothing is reduced. Solution (0.5, 0.5, 0) with
+    y = (1, 0). */
 static char *test_20_qp()
 {
     double Ax[] = {1, 1, 1, 1};
@@ -1145,25 +1175,25 @@ static char *test_20_qp()
     double lbs[] = {-10, -10, -10};
     double ubs[] = {10, 10, 10};
     double c[] = {0, 0, -1};
-    double Px[] = {2, 1, 1, 2};
-    int Pi[] = {0, 1, 0, 1};
-    int Pp[] = {0, 2, 4, 4};
+    double Px[] = {2, 1, 2, 1, 1, 1, 2};
+    int Pi[] = {0, 2, 1, 2, 0, 1, 2};
+    int Pp[] = {0, 2, 4, 7};
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
     Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
-                                         lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+                                         lbs, ubs, c, Px, Pi, Pp, 7, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == UNCHANGED);
 
     PresolvedProblem *red = presolver->reduced_prob;
     mu_assert("reduced dims",
-              red->m == 2 && red->n == 3 && red->nnz == 4 && red->Pnnz == 4);
+              red->m == 2 && red->n == 3 && red->nnz == 4 && red->Pnnz == 7);
     mu_assert("row kept", red->lhs[0] == 1.0 && red->rhs[0] == 1.0);
 
-    double x[] = {1, 0, 4};
-    double y[] = {2, -1};
+    double x[] = {0.5, 0.5, 0};
+    double y[] = {1, 0};
     double z[] = {0, 0, 0};
     postsolve(presolver, x, y, z);
     mu_assert("postsolve values",
@@ -1455,6 +1485,250 @@ static char *test_24_qp()
     return 0;
 }
 
+/*  Doubleton equality row with both variables coupled to each other only.
+    min. (1/2) x'Px + x2,  P = [2 1 0; 1 2 0; 0 0 0]
+    s.t. x0 + x1 = 2, x0 + x2 <= 5, -10 <= x <= 10
+    Only dton_eq is enabled. Row 1 of P holds the diagonal and column 0, so
+    x1 = 2 - x0 can be substituted without fill-in (x1 is the sparser column):
+    P00 = 2 + 2 - 2 = 2, c0 = -(0 + 2 * 2) + 1 * 2 = -2, offset 2 * 2 = 4,
+    P01 removed, and the bounds of x1 transfer to -8 <= x0 <= 10.
+    Reduced solution (x0, x2) = (1, -10), y = 0, z = (0, 1). Postsolve: x1 = 1
+    and y0 = (P10 x0 + P11 x1) / a01 = 3. */
+static char *test_25_qp()
+{
+    double Ax[] = {1, 1, 1, 1};
+    int Ai[] = {0, 1, 0, 2};
+    int Ap[] = {0, 2, 4};
+    int n_rows = 2, n_cols = 3;
+    double lhs[] = {2, -INF};
+    double rhs[] = {2, 5};
+    double lbs[] = {-10, -10, -10};
+    double ubs[] = {10, 10, 10};
+    double c[] = {0, 0, 1};
+    double Px[] = {2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1};
+    int Pp[] = {0, 2, 4, 4};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dton_eq = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    const int *col_map = presolver->prob->constraints->state->work->mappings->cols;
+    mu_assert("x1 substituted",
+              col_map[0] == 0 && col_map[1] == -1 && col_map[2] == 1);
+    mu_assert("reduced dims", red->m == 1 && red->n == 2 && red->nnz == 2);
+    mu_assert("reduced P", red->Pnnz == 1 && red->Px[0] == 2.0 && red->Pi[0] == 0 &&
+                               red->Pp[1] == 1 && red->Pp[2] == 1);
+    mu_assert("reduced c", red->c[0] == -2.0 && red->c[1] == 1.0);
+    mu_assert("reduced offset", red->obj_offset == 4.0);
+    mu_assert("reduced bounds", red->lbs[0] == -8.0 && red->ubs[0] == 10.0);
+
+    double x[] = {1, -10};
+    double y[] = {0};
+    double z[] = {0, 1};
+    postsolve(presolver, x, y, z);
+
+    double correct_x[] = {1, 1, -10};
+    double correct_y[] = {3, 0};
+    double correct_z[] = {0, 0, 1};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
+/*  As test 25, but the stay column x0 is also coupled to x3, so x0 cannot be
+    substituted (fill-in) and x1 must be, whatever the column sizes.
+    min. (1/2) x'Px + x2,  P = [2 1 0 1; 1 2 0 0; 0 0 0 0; 1 0 0 2]
+    s.t. x0 + x1 = 2, x0 + x2 <= 5, x2 + x3 <= 4, -10 <= x <= 10
+    Only dton_eq is enabled. x1 = 2 - x0: P00 = 2, P03 = P30 = 1, P33 = 2,
+    c0 = -2, offset 4. Reduced solution (x0, x2, x3) = (4/3, -10, -2/3),
+    y = 0, z = (0, 1, 0). Postsolve: x1 = 2/3, y0 = (4/3 + 2 * 2/3) / 1 = 8/3. */
+static char *test_26_qp()
+{
+    double Ax[] = {1, 1, 1, 1, 1, 1};
+    int Ai[] = {0, 1, 0, 2, 2, 3};
+    int Ap[] = {0, 2, 4, 6};
+    int n_rows = 3, n_cols = 4;
+    double lhs[] = {2, -INF, -INF};
+    double rhs[] = {2, 5, 4};
+    double lbs[] = {-10, -10, -10, -10};
+    double ubs[] = {10, 10, 10, 10};
+    double c[] = {0, 0, 1, 0};
+    double Px[] = {2, 1, 1, 1, 2, 1, 2};
+    int Pi[] = {0, 1, 3, 0, 1, 0, 3};
+    int Pp[] = {0, 3, 5, 5, 7};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dton_eq = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 7, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    const int *col_map = presolver->prob->constraints->state->work->mappings->cols;
+    mu_assert("x1 substituted", col_map[0] == 0 && col_map[1] == -1 &&
+                                    col_map[2] == 1 && col_map[3] == 2);
+    mu_assert("reduced dims", red->m == 2 && red->n == 3 && red->nnz == 4);
+    double Px_correct[] = {2, 1, 1, 2};
+    int Pi_correct[] = {0, 2, 0, 2};
+    int Pp_correct[] = {0, 2, 2, 4};
+    mu_assert("reduced P", red->Pnnz == 4 &&
+                               ARRAYS_EQUAL_DOUBLE(Px_correct, red->Px, 4) &&
+                               ARRAYS_EQUAL_INT(Pi_correct, red->Pi, 4) &&
+                               ARRAYS_EQUAL_INT(Pp_correct, red->Pp, 4));
+    double c_correct[] = {-2, 1, 0};
+    mu_assert("reduced c", ARRAYS_EQUAL_DOUBLE(c_correct, red->c, 3));
+    mu_assert("reduced offset", red->obj_offset == 4.0);
+
+    double x[] = {4.0 / 3.0, -10, -2.0 / 3.0};
+    double y[] = {0, 0};
+    double z[] = {0, 1, 0};
+    postsolve(presolver, x, y, z);
+
+    double correct_x[] = {4.0 / 3.0, 2.0 / 3.0, -10, -2.0 / 3.0};
+    double correct_y[] = {8.0 / 3.0, 0, 0};
+    double correct_z[] = {0, 0, 1, 0};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
+/*  HS21: min. 0.01 x0^2 + x1^2 - 100 s.t. 10 x0 - x1 >= 10,
+    2 <= x0 <= 50, -50 <= x1 <= 50. Default settings.
+    x1 has no down-locks and its minimiser 0 is interior, so its upper bound
+    becomes 0. The row's minimal activity 10 * 2 - 0 = 20 then exceeds 10 and
+    the row is redundant; both columns become empty and are fixed at their
+    clipped minimisers x = (2, 0). Postsolve: y = 0, z = (0.04, 0), objective
+    offset 0.04 - 100. */
+static char *test_27_qp()
+{
+    double Ax[] = {10, -1};
+    int Ai[] = {0, 1};
+    int Ap[] = {0, 2};
+    int n_rows = 1, n_cols = 2;
+    double lhs[] = {10};
+    double rhs[] = {INF};
+    double lbs[] = {2, -50};
+    double ubs[] = {50, 50};
+    double c[] = {0, 0};
+    double Px[] = {0.02, 2};
+    int Pi[] = {0, 1};
+    int Pp[] = {0, 1, 2};
+
+    Settings *stgs = default_settings();
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 2, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("everything removed",
+              red->m == 0 && red->n == 0 && red->nnz == 0 && red->Pnnz == 0);
+    mu_assert("offset", ABS(red->obj_offset - 0.04) <= QP_TOL);
+
+    double dummy[] = {0};
+    postsolve(presolver, dummy, dummy, dummy);
+    double correct_x[] = {2, 0};
+    double correct_y[] = {0};
+    double correct_z[] = {0.04, 0};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, correct_x, presolver->sol->y,
+                                  correct_y, presolver->sol->z, correct_z, n_rows,
+                                  n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
+/*  Coupled dual fix tightening a bound from the derivative range.
+    min. x0^2 + x1^2 + x0 x1 - 3 x0 - x2 s.t. x0 + x2 <= 5,
+    -10 <= x0 <= 10, 0 <= x1 <= 1, 0 <= x2 <= 10
+    Only dual fix is enabled. x0 has no down-locks and its derivative
+    2 x0 + x1 - 3 is at least 2 x0 - 3 over the box of x1, so every optimal
+    solution has x0 <= 1.5: the upper bound is tightened to 1.5. x1 is empty
+    in A and coupled, its derivative x0 + 2 x1 changes sign over the box, so
+    it stays; x2 is locked. Solution x = (1, 0, 4), y = -1, z = (0, 1, 0). */
+static char *test_28_qp()
+{
+    double Ax[] = {1, 1};
+    int Ai[] = {0, 2};
+    int Ap[] = {0, 2};
+    int n_rows = 1, n_cols = 3;
+    double lhs[] = {-INF};
+    double rhs[] = {5};
+    double lbs[] = {-10, 0, 0};
+    double ubs[] = {10, 1, 10};
+    double c[] = {-3, 0, -1};
+    double Px[] = {2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1};
+    int Pp[] = {0, 2, 4, 4};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dual_fix = true;
+    Presolver *presolver = new_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
+                                         lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    mu_assert("init", presolver != NULL);
+    run_presolver(presolver);
+
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims", red->m == 1 && red->n == 3 && red->Pnnz == 4);
+    mu_assert("ub tightened", red->ubs[0] == 1.5 && red->lbs[0] == -10.0);
+    mu_assert("other bounds unchanged", red->lbs[1] == 0.0 && red->ubs[1] == 1.0 &&
+                                            red->lbs[2] == 0.0 &&
+                                            red->ubs[2] == 10.0);
+
+    double x[] = {1, 0, 4};
+    double y[] = {-1};
+    double z[] = {0, 1, 0};
+    postsolve(presolver, x, y, z);
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, x, presolver->sol->y, y,
+                                  presolver->sol->z, z, n_rows, n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
@@ -1479,6 +1753,10 @@ static const char *all_tests_qp()
     mu_run_test(test_22_qp, counter_qp);
     mu_run_test(test_23_qp, counter_qp);
     mu_run_test(test_24_qp, counter_qp);
+    mu_run_test(test_25_qp, counter_qp);
+    mu_run_test(test_26_qp, counter_qp);
+    mu_run_test(test_27_qp, counter_qp);
+    mu_run_test(test_28_qp, counter_qp);
     return 0;
 }
 
