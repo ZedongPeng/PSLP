@@ -75,6 +75,8 @@
             problem disappears (HS21)
    Test 28: coupled dual fix tightens the bound of a variable with
             off-diagonal entries from the derivative range over the box
+   Test 29: the LP fold is skipped when P has entries (the partition does not
+            see P), and runs through new_presolver_qp with P = 0
 */
 
 #define QP_TOL 1e-8
@@ -1729,6 +1731,77 @@ static char *test_28_qp()
     return 0;
 }
 
+/*  The LP fold partitions (A, lhs, rhs, bounds, c) only, so it must not run
+    on a QP: three copies of  min -x0 - 2 x1  s.t.  x0 + x1 <= 1, 0 <= x <= 1
+    fold to one copy as an LP (test_fold_presolver_lift), but with P00 = 2 on
+    the first copy the problem stays 3 x 6. Only lp_fold is enabled. Solution
+    x = (0, 1, 0, 1, 0, 1), y = -2, z = (1, 0, 1, 0, 1, 0). With P = 0 through
+    new_presolver_qp the fold runs as for an LP. */
+static char *test_29_qp()
+{
+    double Ax[] = {1, 1, 1, 1, 1, 1};
+    int Ai[] = {0, 1, 2, 3, 4, 5};
+    int Ap[] = {0, 2, 4, 6};
+    int n_rows = 3, n_cols = 6;
+    double lhs[] = {-INF, -INF, -INF};
+    double rhs[] = {1, 1, 1};
+    double lbs[] = {0, 0, 0, 0, 0, 0};
+    double ubs[] = {1, 1, 1, 1, 1, 1};
+    double c[] = {-1, -2, -1, -2, -1, -2};
+    double Px[] = {2};
+    int Pi[] = {0};
+    int Pp[] = {0, 1, 1, 1, 1, 1, 1};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->lp_fold = true;
+    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
+                                            lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("not folded",
+              presolver->stats->n_rows_folded == 3 &&
+                  presolver->stats->n_cols_folded == 6 &&
+                  presolver->stats->nnz_removed_lp_fold == 0 &&
+                  presolver->prob->constraints->state->work->fold_maps == NULL);
+    mu_assert("status", run_presolver(presolver) == UNCHANGED);
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims",
+              red->m == 3 && red->n == 6 && red->nnz == 6 && red->Pnnz == 1);
+
+    double x[] = {0, 1, 0, 1, 0, 1};
+    double y[] = {-2, -2, -2};
+    double z[] = {1, 0, 1, 0, 1, 0};
+    postsolve(presolver, x, y, z);
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, x, presolver->sol->y, y,
+                                  presolver->sol->z, z, n_rows, n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
+    free_presolver(presolver);
+
+    // the same problem as an LP through the QP entry point folds to one copy
+    presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs, ubs,
+                                 c, NULL, NULL, NULL, 0, stgs);
+    mu_assert("init lp", presolver != NULL);
+    mu_assert("folded", presolver->stats->n_rows_folded == 1 &&
+                            presolver->stats->n_cols_folded == 2 &&
+                            presolver->stats->nnz_removed_lp_fold == 4);
+    mu_assert("empty P in folded dimensions", presolver->prob->obj->P->m == 2 &&
+                                                  presolver->prob->obj->P->n == 2 &&
+                                                  presolver->prob->obj->P->nnz == 0);
+    mu_assert("presolve lp", run_presolver(presolver) != INFEASIBLE);
+    mu_assert("reduced lp", presolver->reduced_prob->m == 1 &&
+                                presolver->reduced_prob->n == 2 &&
+                                presolver->reduced_prob->Pnnz == 0);
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
@@ -1757,6 +1830,7 @@ static const char *all_tests_qp()
     mu_run_test(test_26_qp, counter_qp);
     mu_run_test(test_27_qp, counter_qp);
     mu_run_test(test_28_qp, counter_qp);
+    mu_run_test(test_29_qp, counter_qp);
     return 0;
 }
 
