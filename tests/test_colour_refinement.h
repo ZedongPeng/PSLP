@@ -16,7 +16,6 @@ typedef struct RefineGraph
 {
     Matrix *A;
     Matrix *AT;
-    Matrix *P; /* NULL without P */
     int *work;
     ColourRefinement *refine;
     int *row_classes;
@@ -57,34 +56,8 @@ graph_refine(RefineGraph *graph, int m, int n, int nnz, const int *Ap, const int
     return result;
 }
 
-/* Like graph_refine, with the square matrix (Pp, Pi, Px) on the columns. */
-static ColourRefinementResult
-graph_refine_qp(RefineGraph *graph, int m, int n, int nnz, const int *Ap,
-                const int *Ai, const double *Ax, int Pnnz, const int *Pp,
-                const int *Pi, const double *Px, ColourRefinementStats *stats)
-{
-    memset(graph, 0, sizeof(*graph));
-    graph->A = matrix_new(Ax, Ai, Ap, (size_t) m, (size_t) n, (size_t) nnz);
-    graph->P = matrix_new(Px, Pi, Pp, (size_t) n, (size_t) n, (size_t) Pnnz);
-    graph->work = (int *) calloc((size_t) n + 1, sizeof(int));
-    graph->AT = transpose(graph->A, graph->work, 0);
-    graph->refine = colour_refinement_new_qp(graph->A, graph->AT, graph->P);
-    graph->row_classes = (int *) calloc((size_t) m + 1, sizeof(int));
-    graph->col_classes = (int *) calloc((size_t) n + 1, sizeof(int));
-    uint64_t *zero_rows = (uint64_t *) calloc((size_t) m + 1, sizeof(uint64_t));
-    uint64_t *zero_cols = (uint64_t *) calloc((size_t) n + 1, sizeof(uint64_t));
-    ColourRefinementOptions defaults = refine_test_options();
-    ColourRefinementResult result =
-        colour_refinement_run(graph->refine, zero_rows, zero_cols, &defaults,
-                              graph->row_classes, graph->col_classes, stats);
-    free(zero_rows);
-    free(zero_cols);
-    return result;
-}
-
 static void graph_free(RefineGraph *graph)
 {
-    free_matrix(graph->P);
     colour_refinement_free(graph->refine);
     free(graph->row_classes);
     free(graph->col_classes);
@@ -273,109 +246,6 @@ static const char *test_refine_empty(void)
     return 0;
 }
 
-/* The two blocks with P on the columns. A diagonal entry on column 0 alone
-   splits columns 0 and 2, and through them the rows; a P that is the same on
-   both blocks keeps the classes of A, and its entries count in the signatures
-   and the duplicate entries. */
-static const char *test_refine_P(void)
-{
-    RefineGraph graph;
-    ColourRefinementStats stats;
-
-    /* P = 5 e0 e0' */
-    const int one_Pp[5] = {0, 1, 1, 1, 1}, one_Pi[1] = {0};
-    const double one_Px[1] = {5};
-    mu_assert("converged", graph_refine_qp(&graph, 4, 4, 8, blocks_Ap, blocks_Ai,
-                                           blocks_Ax, 1, one_Pp, one_Pi, one_Px,
-                                           &stats) == COLOUR_REFINEMENT_CONVERGED);
-    mu_assert("four column classes", stats.n_col_classes == 4);
-    mu_assert("four row classes", stats.n_row_classes == 4);
-    mu_assert("no duplicate entries", stats.duplicate_entries == 0);
-    mu_assert("verified", colour_refinement_verify(graph.refine, graph.row_classes,
-                                                   graph.col_classes));
-    graph_free(&graph);
-
-    /* P = [[5, 7], [7, 6]] on both blocks */
-    const int two_Pp[5] = {0, 2, 4, 6, 8};
-    const int two_Pi[8] = {0, 1, 0, 1, 2, 3, 2, 3};
-    const double two_Px[8] = {5, 7, 7, 6, 5, 7, 7, 6};
-    mu_assert("converged", graph_refine_qp(&graph, 4, 4, 8, blocks_Ap, blocks_Ai,
-                                           blocks_Ax, 8, two_Pp, two_Pi, two_Px,
-                                           &stats) == COLOUR_REFINEMENT_CONVERGED);
-    const int *cols = graph.col_classes;
-    mu_assert("two column classes", stats.n_col_classes == 2);
-    mu_assert("two row classes", stats.n_row_classes == 2);
-    mu_assert("columns 0 and 2 together",
-              cols[0] == cols[2] && cols[1] == cols[3] && cols[0] != cols[1]);
-    /* rows: 2 classes x 1 duplicate x 2 entries; columns: 2 x 1 x (2 + 2) */
-    mu_assert("duplicate entries count P", stats.duplicate_entries == 12);
-    mu_assert("verified", colour_refinement_verify(graph.refine, graph.row_classes,
-                                                   graph.col_classes));
-    /* Column 1 moved into the class of column 0 has other P entries. */
-    graph.col_classes[1] = graph.col_classes[0];
-    mu_assert("tampered partition rejected",
-              !colour_refinement_verify(graph.refine, graph.row_classes,
-                                        graph.col_classes));
-    graph_free(&graph);
-
-    /* The coupling 7 between columns 0 and 3 instead of 2 and 3 is not an
-       automorphism of P, though columns 0 and 2 still have the same P
-       entries: it is their classes that differ. */
-    const int cross_Pp[5] = {0, 2, 3, 4, 6};
-    const int cross_Pi[6] = {0, 3, 1, 2, 0, 3};
-    const double cross_Px[6] = {5, 7, 6, 5, 7, 6};
-    mu_assert("converged",
-              graph_refine_qp(&graph, 4, 4, 8, blocks_Ap, blocks_Ai, blocks_Ax, 6,
-                              cross_Pp, cross_Pi, cross_Px,
-                              &stats) == COLOUR_REFINEMENT_CONVERGED);
-    mu_assert("four column classes", stats.n_col_classes == 4);
-    graph_free(&graph);
-    return 0;
-}
-
-/* Columns without entries in A are refined by P alone: [[1, 2], [2, 1]] keeps
-   one class, a diagonal with two values gives two. The entries of P and of A
-   never mix: a P entry equal to an A entry towards an equal class id. */
-static const char *test_refine_P_only(void)
-{
-    const int Ap[1] = {0};
-    const int Ai[1] = {0};
-    const double Ax[1] = {0};
-    RefineGraph graph;
-    ColourRefinementStats stats;
-
-    const int Pp[3] = {0, 2, 4}, Pi[4] = {0, 1, 0, 1};
-    const double Px[4] = {1, 2, 2, 1};
-    mu_assert("converged",
-              graph_refine_qp(&graph, 0, 2, 0, Ap, Ai, Ax, 4, Pp, Pi, Px, &stats) ==
-                  COLOUR_REFINEMENT_CONVERGED);
-    mu_assert("one column class", stats.n_col_classes == 1);
-    mu_assert("duplicate entries", stats.duplicate_entries == 2);
-    graph_free(&graph);
-
-    const int diag_Pp[3] = {0, 1, 2}, diag_Pi[2] = {0, 1};
-    const double diag_Px[2] = {1, 2};
-    mu_assert("converged",
-              graph_refine_qp(&graph, 0, 2, 0, Ap, Ai, Ax, 2, diag_Pp, diag_Pi,
-                              diag_Px, &stats) == COLOUR_REFINEMENT_CONVERGED);
-    mu_assert("two column classes", stats.n_col_classes == 2);
-    graph_free(&graph);
-
-    /* Column 0 has the entry 1 in P towards itself (column class 0), column 1
-       the entry 1 in A towards row 0 (row class 0): one entry each, same
-       value, same class id, different sides. */
-    const int mix_Ap[2] = {0, 1}, mix_Ai[1] = {1};
-    const double mix_Ax[1] = {1};
-    const int mix_Pp[3] = {0, 1, 1}, mix_Pi[1] = {0};
-    const double mix_Px[1] = {1};
-    mu_assert("converged", graph_refine_qp(&graph, 1, 2, 1, mix_Ap, mix_Ai, mix_Ax,
-                                           1, mix_Pp, mix_Pi, mix_Px,
-                                           &stats) == COLOUR_REFINEMENT_CONVERGED);
-    mu_assert("two column classes", stats.n_col_classes == 2);
-    graph_free(&graph);
-    return 0;
-}
-
 /* 'copies' copies of the block on the diagonal. */
 static void replicate_blocks(int copies, int **Ap_out, int **Ai_out, double **Ax_out)
 {
@@ -447,8 +317,6 @@ static const char *all_tests_colour_refinement(void)
     mu_run_test(test_refine_path, counter_colour_refinement);
     mu_run_test(test_refine_empty, counter_colour_refinement);
     mu_run_test(test_refine_large, counter_colour_refinement);
-    mu_run_test(test_refine_P, counter_colour_refinement);
-    mu_run_test(test_refine_P_only, counter_colour_refinement);
     return 0;
 }
 

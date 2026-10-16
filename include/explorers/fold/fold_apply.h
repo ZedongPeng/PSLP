@@ -35,16 +35,4 @@ FoldReason fold_apply(const Matrix *A, double *lhs, double *rhs, RowTag *row_tag
                       Bound *bounds, ColTag *col_tags, double *c,
                       const FoldMaps *maps, Matrix **folded);
 
-/* As fold_apply, with the quadratic term P (n_cols x n_cols, symmetric) folded
-   into *P_folded: the entry of the classes C and D is the class size |C|
-   times the entries of C's keeper over D, which the partition makes equal to
-   the entry of D and C; the lower triangle is copied from the upper so that
-   the result is symmetric bit for bit, and exact-zero sums are dropped. The
-   rows of *P_folded have no extra space. *P_folded is NULL when P is NULL. On
-   failure both outputs are NULL and nothing is touched. */
-FoldReason fold_apply_qp(const Matrix *A, const Matrix *P, double *lhs, double *rhs,
-                         RowTag *row_tags, Bound *bounds, ColTag *col_tags,
-                         double *c, const FoldMaps *maps, Matrix **folded,
-                         Matrix **P_folded);
-
 #endif // FOLD_APPLY_H

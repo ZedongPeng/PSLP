@@ -226,65 +226,60 @@ void presolver_clean_up(clean_up_scope scope)
 }
 
 /* The outcome of the fold, with the dimensions before and after when it was
-   applied (folded and P_folded are NULL otherwise). */
-static void print_fold_message(FoldReason reason, const FoldStats *stats,
-                               const Matrix *A, const Matrix *P,
-                               const Matrix *folded, const Matrix *P_folded)
+   applied. */
+static void print_fold_message(bool applied, FoldReason reason,
+                               const FoldStats *stats, size_t n_rows, size_t n_cols,
+                               size_t nnz, const Matrix *A)
 {
     printf("PSLP lp_fold: %s (%d rounds, %.3f seconds)",
-           folded ? "applied" : fold_reason_string(reason), stats->rounds,
+           applied ? "applied" : fold_reason_string(reason), stats->rounds,
            stats->time);
-    if (folded)
+    if (applied)
     {
-        printf(", rows %zu -> %zu, cols %zu -> %zu, nnz %zu -> %zu", A->m, folded->m,
-               A->n, folded->n, A->nnz, folded->nnz);
-        if (P->nnz > 0)
-        {
-            printf(", P nnz %zu -> %zu", P->nnz, P_folded->nnz);
-        }
+        printf(", rows %zu -> %zu, cols %zu -> %zu, nnz %zu -> %zu", n_rows, A->m,
+               n_cols, A->n, nnz, A->nnz);
     }
     printf("\n");
 }
 
-/* Finds and applies the fold. Returns true when the problem was folded: *A
-   and *P are then the folded matrices (the given ones freed), the line data
-   is compacted in place and *maps holds the maps; the caller rebuilds AT.
-   Otherwise nothing is touched and *maps is NULL. */
-static bool run_fold(Matrix **A, const Matrix *AT, Matrix **P, double *lhs,
-                     double *rhs, RowTag *row_tags, Bound *bounds, ColTag *col_tags,
-                     double *c, bool verbose, FoldMaps **maps)
+/* Finds and applies the fold. Returns true when the problem was folded: *A is
+   then the folded matrix (the given one freed), the line data is compacted in
+   place and *maps holds the maps; the caller rebuilds AT. Otherwise nothing
+   is touched and *maps is NULL. */
+static bool run_fold(Matrix **A, const Matrix *AT, double *lhs, double *rhs,
+                     RowTag *row_tags, Bound *bounds, ColTag *col_tags, double *c,
+                     bool verbose, FoldMaps **maps)
 {
     FoldOptions options;
     options.min_reduction = LP_FOLD_MIN_REDUCTION;
     options.work_budget = LP_FOLD_WORK_BUDGET;
     options.max_rounds = LP_FOLD_MAX_ROUNDS;
 
+    size_t n_rows = (*A)->m, n_cols = (*A)->n, nnz = (*A)->nnz;
     FoldStats stats;
-    Matrix *folded = NULL, *P_folded = NULL;
+    Matrix *folded = NULL;
     FoldReason reason =
-        fold_detect_qp(*A, AT, *P, lhs, rhs, bounds, c, &options, maps, &stats);
+        fold_detect(*A, AT, lhs, rhs, bounds, c, &options, maps, &stats);
     if (reason == FOLD_FOLDABLE)
     {
-        reason = fold_apply_qp(*A, *P, lhs, rhs, row_tags, bounds, col_tags, c,
-                               *maps, &folded, &P_folded);
+        reason =
+            fold_apply(*A, lhs, rhs, row_tags, bounds, col_tags, c, *maps, &folded);
     }
-    if (verbose)
-    {
-        print_fold_message(reason, &stats, *A, *P, folded, P_folded);
-    }
-
     bool applied = reason == FOLD_FOLDABLE;
     if (applied)
     {
         free_matrix(*A);
-        free_matrix(*P);
         *A = folded;
-        *P = P_folded;
     }
     else
     {
         fold_maps_free(*maps);
         *maps = NULL;
+    }
+
+    if (verbose)
+    {
+        print_fold_message(applied, reason, &stats, n_rows, n_cols, nnz, *A);
     }
     return applied;
 }
@@ -372,7 +367,7 @@ Presolver *new_presolver_qp(const double *Ax, const int *Ai, const int *Ap, size
     if (!matrix_is_symmetric(P)) goto cleanup;
     count_rows(P, P_row_sizes);
     size_t Pnnz_stripped = P->nnz; /* after the explicit zeros were dropped */
-    bool lp_fold = stgs->lp_fold;
+    bool lp_fold = stgs->lp_fold && P->nnz == 0; /* no fold of a QP */
 
     // ---------------------------------------------------------------------------
     //  Build bounds, row tags, A and AT. We first build A, then in parallel
@@ -409,8 +404,8 @@ Presolver *new_presolver_qp(const double *Ax, const int *Ai, const int *Ap, size
     if (lp_fold)
     {
         clock_gettime(CLOCK_MONOTONIC, &fold_timer.start);
-        if (run_fold(&A, AT, &P, lhs_copy, rhs_copy, row_tags, bounds, col_tags,
-                     c_copy, stgs->verbose, &work->fold_maps))
+        if (run_fold(&A, AT, lhs_copy, rhs_copy, row_tags, bounds, col_tags, c_copy,
+                     stgs->verbose, &work->fold_maps))
         {
             free_matrix(AT);
             AT = transpose(A, work->iwork_n_cols,
@@ -419,7 +414,10 @@ Presolver *new_presolver_qp(const double *Ax, const int *Ai, const int *Ap, size
             /* postsolve replays the records into the folded dimensions */
             work->folded_sol = new_solution(A->m, A->n);
             if (!work->folded_sol) goto cleanup;
-            count_rows(P, P_row_sizes);
+            /* P is empty, now in the folded dimensions */
+            free_matrix(P);
+            P = matrix_new_no_extra_space(NULL, NULL, NULL, A->n, A->n, 0);
+            if (!P) goto cleanup;
         }
         clock_gettime(CLOCK_MONOTONIC, &fold_timer.end);
         fold_time = GET_ELAPSED_SECONDS(fold_timer);

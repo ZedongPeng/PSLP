@@ -22,9 +22,7 @@
    columns against the classes of the rows. To refine one side, every line gets
    a signature: its pairs (class of the other end, value bits) in sorted order.
    The lines are sorted by (class, number of entries, signature) and every run
-   of equal keys becomes a class. The entries of P join the signatures of the
-   columns as pairs (class of the other column, value bits) with the top bit of
-   the class set, so that they never compare equal to a pair of A. */
+   of equal keys becomes a class. */
 
 #include "colour_refinement.h"
 #include "Matrix.h"
@@ -33,21 +31,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Marks the pairs of the extra matrix; the class ids are ints. */
-#define EXTRA_PAIR_TAG ((uint64_t) 1 << 63)
-
 typedef struct RefineSide
 {
     int n_lines;
     const RowRange *ranges;
     const int *index; /* The line on the other side of each entry. */
     const double *values;
-    /* A second matrix whose entries join the signatures and index lines of
-       this side (P on the columns); NULL without one. */
-    const RowRange *extra_ranges;
-    const int *extra_index;
-    const double *extra_values;
-    int n_entries; /* Of both matrices. */
+    int n_entries;
     int *class_id;
     int n_classes;
     int duplicate_entries;
@@ -70,7 +60,6 @@ struct ColourRefinement
     uint64_t *signature; /* Of the side with more entries. */
     int *row_copy;       /* Class ids refined by verify. */
     int *col_copy;
-    double work_per_round; /* Entries of a round, in multiples of the problem's. */
 };
 
 static int compare_pair(const void *a, const void *b)
@@ -100,12 +89,7 @@ static int compare_key(const void *a, const void *b)
 
 static int line_count(const RefineSide *side, int line)
 {
-    int count = side->ranges[line].end - side->ranges[line].start;
-    if (side->extra_ranges)
-    {
-        count += side->extra_ranges[line].end - side->extra_ranges[line].start;
-    }
-    return count;
+    return side->ranges[line].end - side->ranges[line].start;
 }
 
 /* Sorts the keys and gives every run of equal keys a class id. Returns the
@@ -164,17 +148,6 @@ static int refine_side(RefineSide *side, const int *other_class, RefineKey *keys
             *pair++ = (uint64_t) other_class[side->index[idx]];
             *pair++ = value_bits(side->values[idx]);
         }
-        if (side->extra_ranges)
-        {
-            /* The classes of this side, as they were before this pass. */
-            for (int idx = side->extra_ranges[line].start;
-                 idx < side->extra_ranges[line].end; idx++)
-            {
-                *pair++ = EXTRA_PAIR_TAG |
-                          (uint64_t) side->class_id[side->extra_index[idx]];
-                *pair++ = value_bits(side->extra_values[idx]);
-            }
-        }
         qsort(pair - 2 * count, (size_t) count, 2 * sizeof(uint64_t), compare_pair);
     }
     return assign_classes(side, keys);
@@ -202,7 +175,7 @@ ColourRefinementResult colour_refinement_run(ColourRefinement *refine,
         refine_side(cols, rows->class_id, refine->keys, refine->signature);
         rounds++;
         /* A round touches the entries of both sides. */
-        work += refine->work_per_round;
+        work += 2.0;
         if (rows->n_classes == n_row_classes && cols->n_classes == n_col_classes)
         {
             result = COLOUR_REFINEMENT_CONVERGED;
@@ -237,15 +210,12 @@ bool colour_refinement_verify(ColourRefinement *refine, const int *row_classes,
     return rows.n_classes == n_row_classes && cols.n_classes == n_col_classes;
 }
 
-static bool side_new(RefineSide *side, const Matrix *M, const Matrix *extra)
+static bool side_new(RefineSide *side, const Matrix *M)
 {
     side->n_lines = (int) M->m;
     side->ranges = M->p;
     side->index = M->i;
     side->values = M->x;
-    side->extra_ranges = extra ? extra->p : NULL;
-    side->extra_index = extra ? extra->i : NULL;
-    side->extra_values = extra ? extra->x : NULL;
     side->n_entries = 0;
     for (int line = 0; line < side->n_lines; line++)
     {
@@ -259,35 +229,17 @@ static bool side_new(RefineSide *side, const Matrix *M, const Matrix *extra)
 
 ColourRefinement *colour_refinement_new(const Matrix *A, const Matrix *AT)
 {
-    return colour_refinement_new_qp(A, AT, NULL);
-}
-
-ColourRefinement *colour_refinement_new_qp(const Matrix *A, const Matrix *AT,
-                                           const Matrix *P)
-{
     ColourRefinement *refine =
         (ColourRefinement *) ps_calloc(1, sizeof(ColourRefinement));
     if (!refine)
     {
         return NULL;
     }
-    if (P && P->nnz == 0)
-    {
-        P = NULL;
-    }
-    if (!side_new(&refine->rows, A, NULL) || !side_new(&refine->cols, AT, P))
+    if (!side_new(&refine->rows, A) || !side_new(&refine->cols, AT))
     {
         colour_refinement_free(refine);
         return NULL;
     }
-    /* A round touches the entries of both sides, counted in multiples of the
-       entries of the problem (those of A and P, all on the column side):
-       exactly 2 without P. */
-    refine->work_per_round =
-        refine->cols.n_entries > 0
-            ? (double) (refine->rows.n_entries + refine->cols.n_entries) /
-                  (double) refine->cols.n_entries
-            : 2.0;
     int n_lines = (int) (A->m > A->n ? A->m : A->n);
     int n_entries = refine->rows.n_entries > refine->cols.n_entries
                         ? refine->rows.n_entries

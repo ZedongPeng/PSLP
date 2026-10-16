@@ -19,14 +19,12 @@
 #ifndef FOLD_H
 #define FOLD_H
 
-/* Folding. Rows whose entries agree, class by class of the columns, and
+/* LP folding. Rows whose entries agree, class by class of the columns, and
    columns whose entries agree, class by class of the rows, form the coarsest
    equitable partition that refines the partition by line data (lhs, rhs) and
-   (lb, ub, c). With a quadratic term P the columns of a class also agree in
-   P, class by class of the columns (fold_detect_qp). Values are equal when
-   they compare equal as doubles; matrix entries are compared by their bits,
-   with -0.0 read as 0.0. Indices and line counts are int, like the matrix
-   indices. */
+   (lb, ub, c). Values are equal when they compare equal as doubles; matrix
+   entries are compared by their bits, with -0.0 read as 0.0. Indices and line
+   counts are int, like the matrix indices. */
 
 struct Matrix;
 struct Bound;
@@ -42,10 +40,8 @@ typedef enum FoldReason
 
 typedef struct FoldOptions
 {
-    /* Both relative to the entries of the problem: those of A, plus those of
-       P when given. */
-    double min_reduction; /* Removable-entry bound required, as a share. */
-    double work_budget;   /* Work allowed, in multiples. */
+    double min_reduction; /* Removable-entry bound required, as a share of nnz. */
+    double work_budget;   /* Work allowed, in multiples of nnz. */
     int max_rounds;
 } FoldOptions;
 
@@ -77,7 +73,7 @@ typedef struct FoldStats
 {
     FoldReason reason;
     int rounds;
-    double work; /* In multiples of the entries of the problem. */
+    double work; /* In multiples of nnz. */
     double time;
 } FoldStats;
 
@@ -89,15 +85,6 @@ FoldReason fold_detect(const struct Matrix *A, const struct Matrix *AT,
                        const struct Bound *bounds, const double *c,
                        const FoldOptions *options, FoldMaps **maps,
                        FoldStats *stats);
-
-/* As fold_detect, with the quadratic term P (n_cols x n_cols, symmetric) in
-   the partition of the columns. P == NULL or an empty P is the LP. The
-   entries of P count towards the reduction the gate asks for. */
-FoldReason fold_detect_qp(const struct Matrix *A, const struct Matrix *AT,
-                          const struct Matrix *P, const double *lhs,
-                          const double *rhs, const struct Bound *bounds,
-                          const double *c, const FoldOptions *options,
-                          FoldMaps **maps, FoldStats *stats);
 
 /* Freeing NULL is safe. */
 void fold_maps_free(FoldMaps *maps);

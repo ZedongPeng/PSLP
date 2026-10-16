@@ -696,7 +696,7 @@ static bool fixture_new(FoldVerifyFixture *fx, const FoldTestLP *P)
         fx->bounds[j].lb = P->lb[j];
         fx->bounds[j].ub = P->ub[j];
     }
-    fx->workspace = fold_workspace_new(fx->A, fx->AT, NULL);
+    fx->workspace = fold_workspace_new(fx->A, fx->AT);
     if (!fx->workspace)
     {
         return false;
@@ -839,8 +839,6 @@ typedef struct FoldApplyResult
 {
     Matrix *A;
     Matrix *folded;
-    Matrix *P;        /* NULL for an LP */
-    Matrix *P_folded; /* NULL for an LP */
     double *lhs, *rhs, *c;
     RowTag *row_tags;
     ColTag *col_tags;
@@ -855,8 +853,6 @@ static void apply_result_free(FoldApplyResult *r)
 {
     free_matrix(r->A);
     free_matrix(r->folded);
-    free_matrix(r->P);
-    free_matrix(r->P_folded);
     free(r->lhs);
     free(r->rhs);
     free(r->c);
@@ -866,20 +862,12 @@ static void apply_result_free(FoldApplyResult *r)
     fold_maps_free(r->maps);
 }
 
-/* Detects and applies the fold of P with the quadratic term (Pp, Pi, Px),
-   none when Pp is NULL. */
-static FoldApplyResult run_apply_qp(const FoldTestLP *P, const int *Pp,
-                                    const int *Pi, const double *Px)
+static FoldApplyResult run_apply(const FoldTestLP *P)
 {
     FoldApplyResult r;
     memset(&r, 0, sizeof(r));
     r.A = matrix_new(P->Ax, P->Ai, P->Ap, (size_t) P->m, (size_t) P->n,
                      (size_t) P->nnz);
-    if (Pp)
-    {
-        r.P =
-            matrix_new(Px, Pi, Pp, (size_t) P->n, (size_t) P->n, (size_t) Pp[P->n]);
-    }
     int *work = (int *) calloc((size_t) P->n + 1, sizeof(int));
     Matrix *AT = transpose(r.A, work, 0);
     r.lhs = (double *) malloc(((size_t) P->m + 1) * sizeof(double));
@@ -902,53 +890,17 @@ static FoldApplyResult run_apply_qp(const FoldTestLP *P, const int *Pp,
         r.col_tags[j] = (ColTag) (j % 5);
     }
     FoldOptions options = fold_test_options(0.0);
-    r.reason = fold_detect_qp(r.A, AT, r.P, r.lhs, r.rhs, r.bounds, r.c, &options,
-                              &r.maps, &r.stats);
+    r.reason = fold_detect(r.A, AT, r.lhs, r.rhs, r.bounds, r.c, &options, &r.maps,
+                           &r.stats);
     r.detect_reason = r.reason;
     if (r.reason == FOLD_FOLDABLE)
     {
-        r.reason = fold_apply_qp(r.A, r.P, r.lhs, r.rhs, r.row_tags, r.bounds,
-                                 r.col_tags, r.c, r.maps, &r.folded, &r.P_folded);
+        r.reason = fold_apply(r.A, r.lhs, r.rhs, r.row_tags, r.bounds, r.col_tags,
+                              r.c, r.maps, &r.folded);
     }
     free_matrix(AT);
     free(work);
     return r;
-}
-
-static FoldApplyResult run_apply(const FoldTestLP *P)
-{
-    return run_apply_qp(P, NULL, NULL, NULL);
-}
-
-/* NULL if P equals the symmetric CSR (Pp, Pi, Px) of order n bit for bit. */
-static const char *same_P(const Matrix *P, int n, const int *Pp, const int *Pi,
-                          const double *Px)
-{
-    if (!P || (int) P->m != n || (int) P->n != n || (int) P->nnz != Pp[n])
-    {
-        snprintf(fold_errbuf, sizeof(fold_errbuf), "P %zu x %zu with %zu entries",
-                 P ? P->m : 0, P ? P->n : 0, P ? P->nnz : 0);
-        return fold_errbuf;
-    }
-    for (int k = 0; k < n; k++)
-    {
-        if (P->p[k].start != Pp[k] || P->p[k].end != Pp[k + 1])
-        {
-            snprintf(fold_errbuf, sizeof(fold_errbuf), "P row %d range", k);
-            return fold_errbuf;
-        }
-        for (int idx = Pp[k]; idx < Pp[k + 1]; idx++)
-        {
-            if (P->i[idx] != Pi[idx] || P->x[idx] != Px[idx])
-            {
-                snprintf(fold_errbuf, sizeof(fold_errbuf),
-                         "P row %d entry %d: (%d, %.17g), expected (%d, %.17g)", k,
-                         idx, P->i[idx], P->x[idx], Pi[idx], Px[idx]);
-                return fold_errbuf;
-            }
-        }
-    }
-    return matrix_is_symmetric(P) ? NULL : "P not symmetric";
 }
 
 /* NULL if the folded problem equals E with costs scaled by 'cost_factor'. */
@@ -1150,121 +1102,6 @@ static const char *test_fold_apply_random(void)
         }
         trials++;
     }
-    return 0;
-}
-
-/* ---- with P ------------------------------------------------------------------ */
-
-/* Three copies of the block with P = [[2, 1], [1, 4]] on each: the folded
-   problem is the block with c and P times three. */
-static const char *test_fold_qp_blocks(void)
-{
-    static const int Pp[7] = {0, 2, 4, 6, 8, 10, 12};
-    static const int Pi[12] = {0, 1, 0, 1, 2, 3, 2, 3, 4, 5, 4, 5};
-    static const double Px[12] = {2, 1, 1, 4, 2, 1, 1, 4, 2, 1, 1, 4};
-    FoldTestLP b = base_block();
-    FoldTestLP p = flp_replicate(&b, 3);
-    FoldApplyResult r = run_apply_qp(&p, Pp, Pi, Px);
-    mu_assert("expected foldable", r.reason == FOLD_FOLDABLE);
-    const char *err = same_as_lp(&r, &b, 3.0);
-    mu_assert(err ? err : "", err == NULL);
-    static const int Pp_f[3] = {0, 2, 4}, Pi_f[4] = {0, 1, 0, 1};
-    static const double Px_f[4] = {6, 3, 3, 12};
-    err = same_P(r.P_folded, 2, Pp_f, Pi_f, Px_f);
-    mu_assert(err ? err : "", err == NULL);
-    apply_result_free(&r);
-    flp_free(&p);
-    flp_free(&b);
-    return 0;
-}
-
-/* Two copies of the block, coupled by P03 = P30 = 1: A alone folds them, but
-   the coupling is not symmetric under the swap of the copies (it would pair
-   x0 with x1 of the other copy), so nothing folds. */
-static const char *test_fold_qp_breaks_symmetry(void)
-{
-    static const int Pp[5] = {0, 1, 1, 1, 2}, Pi[2] = {3, 0};
-    static const double Px[2] = {1, 1};
-    FoldTestLP b = base_block();
-    FoldTestLP p = flp_replicate(&b, 2);
-    FoldApplyResult r = run_apply(&p);
-    mu_assert("foldable as an LP", r.reason == FOLD_FOLDABLE);
-    apply_result_free(&r);
-    r = run_apply_qp(&p, Pp, Pi, Px);
-    mu_assert("nothing to fold with P", r.reason == FOLD_NOTHING);
-    apply_result_free(&r);
-    flp_free(&p);
-    flp_free(&b);
-    return 0;
-}
-
-/* The same copies coupled by P02 = P20 = 1 with P00 = P22 = 3: x0 and x2 are
-   swapped together, the folded class {0, 2} has P_f = 2 (3 + 1) = 8. With
-   P00 = P22 = -1 the sum cancels exactly and the entry is dropped. */
-static const char *test_fold_qp_cross_class(void)
-{
-    static const int Pp[5] = {0, 2, 2, 4, 4}, Pi[4] = {0, 2, 0, 2};
-    double Px[4] = {3, 1, 1, 3};
-    FoldTestLP b = base_block();
-    FoldTestLP p = flp_replicate(&b, 2);
-    FoldApplyResult r = run_apply_qp(&p, Pp, Pi, Px);
-    mu_assert("expected foldable", r.reason == FOLD_FOLDABLE);
-    const char *err = same_as_lp(&r, &b, 2.0);
-    mu_assert(err ? err : "", err == NULL);
-    static const int Pp_f[3] = {0, 1, 1}, Pi_f[1] = {0};
-    static const double Px_f[1] = {8};
-    err = same_P(r.P_folded, 2, Pp_f, Pi_f, Px_f);
-    mu_assert(err ? err : "", err == NULL);
-    apply_result_free(&r);
-
-    Px[0] = Px[3] = -1;
-    r = run_apply_qp(&p, Pp, Pi, Px);
-    mu_assert("expected foldable", r.reason == FOLD_FOLDABLE);
-    static const int Pp_0[3] = {0, 0, 0};
-    err = same_P(r.P_folded, 2, Pp_0, Pi_f, Px_f);
-    mu_assert(err ? err : "", err == NULL);
-    apply_result_free(&r);
-    flp_free(&p);
-    flp_free(&b);
-    return 0;
-}
-
-/* One row over seven equal columns, P coupling the first six to the last with
-   0.1: the classes are {0..5} and {6}. The folded entry is 6 x 0.1 from the
-   class {0..5}, but 0.1 added six times from the class {6}, which differs in
-   the last bit; the folded P takes the upper value for both. */
-static const char *test_fold_qp_mirror(void)
-{
-    static const int Pp[8] = {0, 1, 2, 3, 4, 5, 6, 12};
-    static const int Pi[12] = {6, 6, 6, 6, 6, 6, 0, 1, 2, 3, 4, 5};
-    static const double Px[12] = {0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
-                                  0.1, 0.1, 0.1, 0.1, 0.1, 0.1};
-    FoldTestLP p = flp_alloc(1, 7, 7);
-    p.Ap[0] = 0;
-    p.Ap[1] = 7;
-    for (int j = 0; j < 7; j++)
-    {
-        p.Ai[j] = j;
-        p.Ax[j] = 1;
-    }
-    flp_fill_rows(&p, -INF, 1);
-    flp_fill_cols(&p, 0, 1, 0);
-    double sum = 0;
-    for (int k = 0; k < 6; k++)
-    {
-        sum += 0.1;
-    }
-    mu_assert("the test needs a rounding difference", sum != 6 * 0.1);
-    FoldApplyResult r = run_apply_qp(&p, Pp, Pi, Px);
-    mu_assert("expected foldable", r.reason == FOLD_FOLDABLE);
-    mu_assert("1 x 2", r.folded->m == 1 && r.folded->n == 2 && r.folded->nnz == 2 &&
-                           r.folded->x[0] == 6 && r.folded->x[1] == 1);
-    static const int Pp_f[3] = {0, 1, 2}, Pi_f[2] = {1, 0};
-    const double Px_f[2] = {6 * 0.1, 6 * 0.1};
-    const char *err = same_P(r.P_folded, 2, Pp_f, Pi_f, Px_f);
-    mu_assert(err ? err : "", err == NULL);
-    apply_result_free(&r);
-    flp_free(&p);
     return 0;
 }
 
@@ -1587,10 +1424,6 @@ static const char *all_tests_fold(void)
     mu_run_test(test_fold_apply_exact_zero, counter_fold);
     mu_run_test(test_fold_apply_unsorted_row, counter_fold);
     mu_run_test(test_fold_apply_random, counter_fold);
-    mu_run_test(test_fold_qp_blocks, counter_fold);
-    mu_run_test(test_fold_qp_breaks_symmetry, counter_fold);
-    mu_run_test(test_fold_qp_cross_class, counter_fold);
-    mu_run_test(test_fold_qp_mirror, counter_fold);
     mu_run_test(test_fold_postsolve_lift, counter_fold);
     mu_run_test(test_fold_postsolve_class_sizes, counter_fold);
     mu_run_test(test_fold_presolver_lift, counter_fold);

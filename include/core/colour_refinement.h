@@ -27,11 +27,6 @@
    class, the same multiset of labels on their edges into it, and likewise for
    columns.
 
-   A square matrix P on the columns (colour_refinement_new_qp) adds the pairs
-   (class of the other column, value bits) of its entries to the signatures of
-   the columns, kept apart from the pairs of A: two columns of a class then
-   also have, for every column class, the same multiset of labels in P.
-
    The multisets are compared exactly, so the partition is equitable whenever
    the run converges. Every round recomputes and sorts the signature of every
    line, which costs about nnz log nnz.
@@ -55,16 +50,14 @@ typedef enum ColourRefinementResult
 
 typedef struct ColourRefinementOptions
 {
-    /* Entries touched before giving up, in multiples of the entries of the
-       problem (A, plus P when given); a round touches 2 nnz(A) + nnz(P). */
-    double work_budget;
-    int max_rounds; /* A round refines the rows, then the columns. */
+    double work_budget; /* Entries touched before giving up, in multiples of nnz. */
+    int max_rounds;     /* A round refines the rows, then the columns. */
 } ColourRefinementOptions;
 
 typedef struct ColourRefinementStats
 {
     int rounds;
-    double work; /* Entries touched, in multiples of the entries of the problem. */
+    double work; /* Entries touched, in multiples of nnz. */
     int n_row_classes;
     int n_col_classes;
     /* Sum over the classes of both sides of (size - 1) times the entries of a
@@ -77,12 +70,6 @@ typedef struct ColourRefinementStats
    failure; nothing after this allocates. */
 ColourRefinement *colour_refinement_new(const struct Matrix *A,
                                         const struct Matrix *AT);
-
-/* As colour_refinement_new, with the square matrix P (n_cols x n_cols) on the
-   columns. P == NULL or an empty P gives the refinement of A alone. */
-ColourRefinement *colour_refinement_new_qp(const struct Matrix *A,
-                                           const struct Matrix *AT,
-                                           const struct Matrix *P);
 void colour_refinement_free(ColourRefinement *refine);
 
 /* Refines from the start colours, one per row and one per column, to a
