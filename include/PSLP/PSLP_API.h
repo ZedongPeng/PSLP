@@ -142,8 +142,9 @@ extern "C"
        drops explicit zeros. The function returns NULL if Pnnz > 0 with a NULL
        array, Pnnz > INT_MAX, the CSR structure is invalid (see
        matrix_valid_csr_input) or P is not exactly symmetric. Positive
-       semidefiniteness is not checked. The LP fold is skipped when P has
-       entries. */
+       semidefiniteness is not checked. The fold (lp_fold) respects P: the
+       columns of a class agree in P as well, and the folded P is returned in
+       the reduced problem. */
     Presolver *new_presolver_qp(const double *Ax, const int *Ai, const int *Ap,
                                 size_t m, size_t n, size_t nnz, const double *lhs,
                                 const double *rhs, const double *lbs,

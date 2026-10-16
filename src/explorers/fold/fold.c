@@ -46,7 +46,7 @@ const char *fold_reason_string(FoldReason reason)
     return "unknown";
 }
 
-FoldWorkspace *fold_workspace_new(const Matrix *A, const Matrix *AT)
+FoldWorkspace *fold_workspace_new(const Matrix *A, const Matrix *AT, const Matrix *P)
 {
     FoldWorkspace *work = (FoldWorkspace *) ps_calloc(1, sizeof(FoldWorkspace));
     if (!work)
@@ -54,7 +54,7 @@ FoldWorkspace *fold_workspace_new(const Matrix *A, const Matrix *AT)
         return NULL;
     }
     size_t n_lines = A->m > A->n ? A->m : A->n;
-    work->refine = colour_refinement_new(A, AT);
+    work->refine = colour_refinement_new_qp(A, AT, P);
     work->row_colours = (uint64_t *) ps_malloc(A->m + 1, sizeof(uint64_t));
     work->col_colours = (uint64_t *) ps_malloc(A->n + 1, sizeof(uint64_t));
     work->row_classes = (int *) ps_malloc(A->m + 1, sizeof(int));
@@ -212,13 +212,16 @@ bool fold_check(const FoldMaps *maps, int n_rows, int n_cols, const double *lhs,
     return true;
 }
 
-/* Colours, refines, gates, extracts the maps and checks them. */
-static FoldReason find_fold(FoldWorkspace *work, const Matrix *A, const double *lhs,
-                            const double *rhs, const Bound *bounds, const double *c,
+/* Colours, refines, gates, extracts the maps and checks them. P is NULL or
+   empty for an LP. */
+static FoldReason find_fold(FoldWorkspace *work, const Matrix *A, const Matrix *P,
+                            const double *lhs, const double *rhs,
+                            const Bound *bounds, const double *c,
                             const FoldOptions *options, FoldMaps *maps,
                             FoldStats *stats)
 {
     int n_rows = (int) A->m, n_cols = (int) A->n;
+    size_t nnz = A->nnz + (P ? P->nnz : 0);
 
     /* assign initial colours */
     fold_start_colours(work, n_rows, n_cols, lhs, rhs, bounds, c);
@@ -244,7 +247,7 @@ static FoldReason find_fold(FoldWorkspace *work, const Matrix *A, const double *
     }
     bool removes_nothing = refine_stats.duplicate_entries == 0;
     bool too_small =
-        refine_stats.duplicate_entries < options->min_reduction * (double) A->nnz;
+        refine_stats.duplicate_entries < options->min_reduction * (double) nnz;
     if (removes_nothing || too_small)
     {
         return FOLD_NOTHING;
@@ -265,12 +268,20 @@ FoldReason fold_detect(const Matrix *A, const Matrix *AT, const double *lhs,
                        const double *rhs, const Bound *bounds, const double *c,
                        const FoldOptions *options, FoldMaps **maps, FoldStats *stats)
 {
+    return fold_detect_qp(A, AT, NULL, lhs, rhs, bounds, c, options, maps, stats);
+}
+
+FoldReason fold_detect_qp(const Matrix *A, const Matrix *AT, const Matrix *P,
+                          const double *lhs, const double *rhs, const Bound *bounds,
+                          const double *c, const FoldOptions *options,
+                          FoldMaps **maps, FoldStats *stats)
+{
     Timer timer;
     clock_gettime(CLOCK_MONOTONIC, &timer.start);
     memset(stats, 0, sizeof(*stats));
 
     FoldReason reason;
-    FoldWorkspace *work = fold_workspace_new(A, AT);
+    FoldWorkspace *work = fold_workspace_new(A, AT, P);
     FoldMaps *found = maps_new((int) A->m, (int) A->n);
     if (!work || !found)
     {
@@ -278,7 +289,7 @@ FoldReason fold_detect(const Matrix *A, const Matrix *AT, const double *lhs,
     }
     else
     {
-        reason = find_fold(work, A, lhs, rhs, bounds, c, options, found, stats);
+        reason = find_fold(work, A, P, lhs, rhs, bounds, c, options, found, stats);
     }
     fold_workspace_free(work);
     if (reason != FOLD_FOLDABLE)

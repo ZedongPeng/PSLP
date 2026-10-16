@@ -41,8 +41,9 @@ typedef struct FoldWorkspace
     int *scratch; /* size: max(n_rows, n_cols), the first line of each class. */
 } FoldWorkspace;
 
-/* NULL when an allocation fails. Freeing NULL is safe. */
-FoldWorkspace *fold_workspace_new(const struct Matrix *A, const struct Matrix *AT);
+/* NULL when an allocation fails. Freeing NULL is safe. P may be NULL. */
+FoldWorkspace *fold_workspace_new(const struct Matrix *A, const struct Matrix *AT,
+                                  const struct Matrix *P);
 void fold_workspace_free(FoldWorkspace *work);
 
 /* Start colours from the line data: a hash of (lhs, rhs) for a row and of

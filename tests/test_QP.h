@@ -16,6 +16,7 @@
 #include "State.h"
 #include "Workspace.h"
 #include "dVec.h"
+#include "fold.h"
 #include "iVec.h"
 #include "kkt.h"
 #include "minunit.h"
@@ -75,8 +76,11 @@
             problem disappears (HS21)
    Test 28: coupled dual fix tightens the bound of a variable with
             off-diagonal entries from the derivative range over the box
-   Test 29: the LP fold is skipped when P has entries (the partition does not
-            see P), and runs through new_presolver_qp with P = 0
+   Test 29: the fold respects P: a diagonal entry on one copy keeps that copy
+            out of the fold, the other copies still fold; P = 0 through
+            new_presolver_qp folds as an LP
+   Test 30: the fold of a QP: P and c of the folded problem are those of a
+            copy times the class size, and the lift is a KKT point
 */
 
 #define QP_TOL 1e-8
@@ -1731,10 +1735,11 @@ static char *test_28_qp()
     return 0;
 }
 
-/*  The LP fold partitions (A, lhs, rhs, bounds, c) only, so it must not run
-    on a QP: three copies of  min -x0 - 2 x1  s.t.  x0 + x1 <= 1, 0 <= x <= 1
-    fold to one copy as an LP (test_fold_presolver_lift), but with P00 = 2 on
-    the first copy the problem stays 3 x 6. Only lp_fold is enabled. Solution
+/*  The fold sees P: three copies of  min -x0 - 2 x1  s.t.  x0 + x1 <= 1,
+    0 <= x <= 1  fold to one copy as an LP (test_fold_presolver_lift), but with
+    P00 = 2 on the first copy that copy stays apart and the other two fold:
+    2 x 4 with P_f = 2 e0 e0'. Only lp_fold is enabled. KKT point of the folded
+    problem: x_f = (0, 1, 0, 1), y_f = (-2, -4), z_f = (1, 0, 2, 0); lifted
     x = (0, 1, 0, 1, 0, 1), y = -2, z = (1, 0, 1, 0, 1, 0). With P = 0 through
     new_presolver_qp the fold runs as for an LP. */
 static char *test_29_qp()
@@ -1758,20 +1763,32 @@ static char *test_29_qp()
     Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
                                             lbs, ubs, c, Px, Pi, Pp, 1, stgs);
     mu_assert("init", presolver != NULL);
-    mu_assert("not folded",
-              presolver->stats->n_rows_folded == 3 &&
-                  presolver->stats->n_cols_folded == 6 &&
-                  presolver->stats->nnz_removed_lp_fold == 0 &&
-                  presolver->prob->constraints->state->work->fold_maps == NULL);
-    mu_assert("status", run_presolver(presolver) == UNCHANGED);
+    const PresolveStats *stats = presolver->stats;
+    mu_assert("folded 2 x 4",
+              stats->n_rows_folded == 2 && stats->n_cols_folded == 4 &&
+                  stats->nnz_removed_lp_fold == 2 && stats->Pnnz_original == 1);
+    const FoldMaps *maps = presolver->prob->constraints->state->work->fold_maps;
+    mu_assert("maps", maps != NULL && maps->col_rep[4] == 2 &&
+                          maps->col_rep[5] == 3 && maps->row_rep[2] == 1 &&
+                          maps->col_rep[2] == 2);
+    const Matrix *P = presolver->prob->obj->P;
+    mu_assert("folded P", P->m == 4 && P->n == 4 && P->nnz == 1 && P->i[0] == 0 &&
+                              P->x[0] == 2.0);
+    mu_assert("presolve", run_presolver(presolver) != INFEASIBLE);
     PresolvedProblem *red = presolver->reduced_prob;
     mu_assert("reduced dims",
-              red->m == 3 && red->n == 6 && red->nnz == 6 && red->Pnnz == 1);
+              red->m == 2 && red->n == 4 && red->nnz == 4 && red->Pnnz == 1);
+    mu_assert("folded c", red->c[0] == -1 && red->c[1] == -2 && red->c[2] == -2 &&
+                              red->c[3] == -4);
 
+    double x_f[] = {0, 1, 0, 1};
+    double y_f[] = {-2, -4};
+    double z_f[] = {1, 0, 2, 0};
+    mu_assert("folded KKT", is_kkt_point(red, x_f, y_f, z_f, QP_TOL));
+    postsolve(presolver, x_f, y_f, z_f);
     double x[] = {0, 1, 0, 1, 0, 1};
     double y[] = {-2, -2, -2};
     double z[] = {1, 0, 1, 0, 1, 0};
-    postsolve(presolver, x, y, z);
     mu_assert("postsolve values",
               is_solution_correct(presolver->sol->x, x, presolver->sol->y, y,
                                   presolver->sol->z, z, n_rows, n_cols, QP_TOL));
@@ -1796,6 +1813,72 @@ static char *test_29_qp()
     mu_assert("reduced lp", presolver->reduced_prob->m == 1 &&
                                 presolver->reduced_prob->n == 2 &&
                                 presolver->reduced_prob->Pnnz == 0);
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
+/*  Three copies of  min x0^2 + x0 x1 + x1^2 - 2 x0 - 4 x1  s.t.  x0 + x1 <= 1,
+    0 <= x <= 1  (P = [[2, 1], [1, 2]] on each copy) fold to one copy with
+    P_f = 3 P and c_f = 3 c. KKT point of the folded problem: x_f = (0, 1),
+    y_f = -3, z_f = (0, -3); lifted x = (0, 1), y = -1, z = (0, -1) per copy.
+    Only lp_fold is enabled. */
+static char *test_30_qp()
+{
+    double Ax[] = {1, 1, 1, 1, 1, 1};
+    int Ai[] = {0, 1, 2, 3, 4, 5};
+    int Ap[] = {0, 2, 4, 6};
+    int n_rows = 3, n_cols = 6;
+    double lhs[] = {-INF, -INF, -INF};
+    double rhs[] = {1, 1, 1};
+    double lbs[] = {0, 0, 0, 0, 0, 0};
+    double ubs[] = {1, 1, 1, 1, 1, 1};
+    double c[] = {-2, -4, -2, -4, -2, -4};
+    double Px[] = {2, 1, 1, 2, 2, 1, 1, 2, 2, 1, 1, 2};
+    int Pi[] = {0, 1, 0, 1, 2, 3, 2, 3, 4, 5, 4, 5};
+    int Pp[] = {0, 2, 4, 6, 8, 10, 12};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->lp_fold = true;
+    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
+                                            lbs, ubs, c, Px, Pi, Pp, 12, stgs);
+    mu_assert("init", presolver != NULL);
+    const PresolveStats *stats = presolver->stats;
+    mu_assert("folded 1 x 2",
+              stats->n_rows_folded == 1 && stats->n_cols_folded == 2 &&
+                  stats->nnz_removed_lp_fold == 4 && stats->Pnnz_original == 12);
+    const Matrix *P = presolver->prob->obj->P;
+    mu_assert("folded P is 3 P", P->m == 2 && P->n == 2 && P->nnz == 4 &&
+                                     P->x[0] == 6 && P->x[1] == 3 && P->x[2] == 3 &&
+                                     P->x[3] == 6);
+    const State *state = presolver->prob->constraints->state;
+    mu_assert("P row sizes",
+              state->P_row_sizes[0] == 2 && state->P_row_sizes[1] == 2);
+    mu_assert("presolve", run_presolver(presolver) != INFEASIBLE);
+    PresolvedProblem *red = presolver->reduced_prob;
+    mu_assert("reduced dims",
+              red->m == 1 && red->n == 2 && red->nnz == 2 && red->Pnnz == 4);
+    mu_assert("folded c", red->c[0] == -6 && red->c[1] == -12);
+    mu_assert("Pnnz_reduced", stats->Pnnz_reduced == 4);
+
+    double x_f[] = {0, 1};
+    double y_f[] = {-3};
+    double z_f[] = {0, -3};
+    mu_assert("folded KKT", is_kkt_point(red, x_f, y_f, z_f, QP_TOL));
+    postsolve(presolver, x_f, y_f, z_f);
+    double x[] = {0, 1, 0, 1, 0, 1};
+    double y[] = {-1, -1, -1};
+    double z[] = {0, -1, 0, -1, 0, -1};
+    mu_assert("postsolve values",
+              is_solution_correct(presolver->sol->x, x, presolver->sol->y, y,
+                                  presolver->sol->z, z, n_rows, n_cols, QP_TOL));
+    PresolvedProblem orig =
+        problem_from_csr_qp(Ax, Ai, Ap, n_rows, n_cols, Ap[n_rows], lhs, rhs, lbs,
+                            ubs, c, Px, Pi, Pp, Pp[n_cols]);
+    mu_assert("KKT", is_kkt_point(&orig, presolver->sol->x, presolver->sol->y,
+                                  presolver->sol->z, QP_TOL));
 
     PS_FREE(stgs);
     free_presolver(presolver);
@@ -1831,6 +1914,7 @@ static const char *all_tests_qp()
     mu_run_test(test_27_qp, counter_qp);
     mu_run_test(test_28_qp, counter_qp);
     mu_run_test(test_29_qp, counter_qp);
+    mu_run_test(test_30_qp, counter_qp);
     return 0;
 }
 
