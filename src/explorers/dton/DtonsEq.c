@@ -146,8 +146,9 @@ PresolveStatus remove_dton_eq_rows(Problem *prob)
         }
 
         /* Without progress the deferred rows are the ones the round cannot
-           eliminate (both columns in P, neither a diagonal alone). They stay on
-           the worklist for the next call. */
+           eliminate (both columns in P, neither substitutable without fill-in,
+           see dton_choose_subst_qp). They stay on the worklist for the next
+           call. */
         if (!progress)
         {
             break;

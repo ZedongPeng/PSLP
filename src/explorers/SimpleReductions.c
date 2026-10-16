@@ -566,7 +566,13 @@ PresolveStatus remove_empty_cols(Problem *prob)
                 continue;
             }
 
+            // as in P_dual_fix, a huge unconstrained minimiser is left alone
             val = -c[k] / Pkk;
+            if (IS_HUGE(val))
+            {
+                empty_cols->data[n_kept++] = k;
+                continue;
+            }
             if (!HAS_TAG(col_tags[k], C_TAG_LB_INF) && val < bounds[k].lb)
             {
                 val = bounds[k].lb;
@@ -649,7 +655,7 @@ PresolveStatus remove_empty_cols(Problem *prob)
         fix_var_in_obj(prob, k, val);
     }
 
-    // only the columns coupled through P remain
+    // only the columns in P that were kept above remain
     empty_cols->len = n_kept;
     return UNCHANGED;
 }

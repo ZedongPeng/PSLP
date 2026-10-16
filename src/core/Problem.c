@@ -243,58 +243,50 @@ void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double s
 bool coupled_dton_subst_ok(const Matrix *P, const int *P_row_sizes, int k, int j,
                            double s, double *Pkk, double *Pkj)
 {
-    *Pkk = 0.0;
-    *Pkj = 0.0;
-    if (P_row_sizes[k] != 2)
-    {
-        return false;
-    }
-    for (int jj = P->p[k].start; jj < P->p[k].end; ++jj)
+    double pkk = 0.0, pkj = 0.0;
+    bool ok = P_row_sizes[k] == 2;
+
+    /* row k holds nothing but k and j */
+    for (int jj = P->p[k].start; ok && jj < P->p[k].end; ++jj)
     {
         if (P->i[jj] == k)
         {
-            *Pkk = P->x[jj];
+            pkk = P->x[jj];
         }
         else if (P->i[jj] == j)
         {
-            *Pkj = P->x[jj];
+            pkj = P->x[jj];
         }
         else
         {
-            *Pkk = 0.0;
-            *Pkj = 0.0;
-            return false;
+            ok = false;
         }
     }
-    if (*Pkk <= 0.0 || *Pkj == 0.0)
-    {
-        *Pkk = 0.0;
-        *Pkj = 0.0;
-        return false;
-    }
+    ok = ok && pkk > 0.0 && pkj != 0.0;
 
-    int len_j = P_row_sizes[j];
-    int start_j = P->p[j].start;
-    int rel = sorted_find(P->i + start_j, len_j, j);
-    bool ok = (rel >= 0);
     if (ok)
     {
-        /* v'Pv >= 0 for v = e_j - s e_k, so the new diagonal is nonnegative up
-           to rounding and exactly zero only if P v = 0, which empties the rest
-           of row j (row k holds nothing but k and j) */
-        double Pjj = P->x[start_j + rel];
-        double t1 = *Pkk * s * s;
-        double t2 = 2.0 * *Pkj * s;
-        double new_Pjj = Pjj + t1 - t2;
-        double tol =
-            MAX(ZERO_TOL, P_DIAG_CANCEL_TOL_REL * MAX(ABS(Pjj), MAX(t1, ABS(t2))));
-        ok = (new_Pjj >= -tol) && (new_Pjj > tol || len_j == 2);
+        int len_j = P_row_sizes[j];
+        int start_j = P->p[j].start;
+        int rel = sorted_find(P->i + start_j, len_j, j);
+        ok = rel >= 0;
+        if (ok)
+        {
+            /* v'Pv >= 0 for v = e_j - s e_k, so the new diagonal is nonnegative
+               up to rounding and exactly zero only if P v = 0, which empties
+               the rest of row j */
+            double Pjj = P->x[start_j + rel];
+            double t1 = pkk * s * s;
+            double t2 = 2.0 * pkj * s;
+            double new_Pjj = Pjj + t1 - t2;
+            double tol = MAX(ZERO_TOL, P_DIAG_CANCEL_TOL_REL *
+                                           MAX(ABS(Pjj), MAX(t1, ABS(t2))));
+            ok = (new_Pjj >= -tol) && (new_Pjj > tol || len_j == 2);
+        }
     }
-    if (!ok)
-    {
-        *Pkk = 0.0;
-        *Pkj = 0.0;
-    }
+
+    *Pkk = ok ? pkk : 0.0;
+    *Pkj = ok ? pkj : 0.0;
     return ok;
 }
 
