@@ -64,6 +64,37 @@ extern "C"
         bool verbose;
     } Settings;
 
+    /* struct corresponding to the problem to presolve,
+           min (1/2) x'Px + c'x  s.t.  lhs <= Ax <= rhs,  lbs <= x <= ubs.
+       Optional parts are left NULL or 0, so an LP leaves P unset. */
+    typedef struct
+    {
+        // CSR format of a matrix A of size m x n with nnz non-zeros
+        const double *Ax;
+        const int *Ai;
+        const int *Ap;
+        size_t m;
+        size_t n;
+        size_t nnz;
+
+        // lhs and rhs in the form lhs <= Ax <= rhs
+        const double *lhs;
+        const double *rhs;
+        const double *c;
+
+        // variable bounds lbs <= x <= ubs
+        const double *lbs;
+        const double *ubs;
+
+        /* CSR format of the quadratic objective matrix P (n x n, full
+           symmetric matrix with sorted column indices, Pnnz non-zeros).
+           Pp == NULL or Pnnz == 0 means P = 0, i.e. an LP. */
+        const double *Px;
+        const int *Pi;
+        const int *Pp;
+        size_t Pnnz;
+    } OriginalProblem;
+
     /* struct corresponding to the presolved problem */
     typedef struct
     {
@@ -124,32 +155,23 @@ extern "C"
     void set_settings_false(Settings *stgs);
 
     /* Initialize presolver, allocate memory, and build internal data structures.
-       The presolver maintains internal deep copies of Ax, Ai, Ap, lhs, rhs, lbs,
-       ubs, and c. The user is responsible for freeing the presolver using
-       'free_presolver'. If the allocation fails, the function returns NULL.
-       The matrix should be given in CSR form. Since the row pointers are ints,
-       nnz must be at most INT_MAX; otherwise the function returns NULL.
-       Equivalent to new_presolver_qp with P = 0. */
+       The presolver maintains internal deep copies of all arrays of 'problem'
+       and drops explicit zeros of P. The user is responsible for freeing the
+       presolver using 'free_presolver'. Since the row pointers are ints, nnz and
+       Pnnz must be at most INT_MAX. The function returns NULL if the allocation
+       fails, nnz or Pnnz is too large, Pnnz > 0 with a NULL array of P, the CSR
+       structure of P is invalid (see matrix_valid_csr_input) or P is not exactly
+       symmetric. Positive semidefiniteness of P is not checked. lp_fold is
+       skipped when P has entries. */
+    Presolver *new_presolver_from_problem(const OriginalProblem *problem,
+                                          const Settings *stgs);
+
+    /* Same as new_presolver_from_problem for an LP, with the problem data
+       given as arguments. */
     Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap,
                              size_t m, size_t n, size_t nnz, const double *lhs,
                              const double *rhs, const double *lbs, const double *ubs,
                              const double *c, const Settings *stgs);
-
-    /* Same as new_presolver with a quadratic objective term (1/2) x'Px.
-       (Px, Pi, Pp, Pnnz) is the n x n matrix P in CSR form, given as the full
-       symmetric matrix (both triangles) with sorted column indices. Pp == NULL
-       or Pnnz == 0 means P = 0, i.e. an LP. The presolver keeps a deep copy and
-       drops explicit zeros. The function returns NULL if Pnnz > 0 with a NULL
-       array, Pnnz > INT_MAX, the CSR structure is invalid (see
-       matrix_valid_csr_input) or P is not exactly symmetric. Positive
-       semidefiniteness is not checked. lp_fold is skipped when P has
-       entries. */
-    Presolver *new_presolver_qp(const double *Ax, const int *Ai, const int *Ap,
-                                size_t m, size_t n, size_t nnz, const double *lhs,
-                                const double *rhs, const double *lbs,
-                                const double *ubs, const double *c, const double *Px,
-                                const int *Pi, const int *Pp, size_t Pnnz,
-                                const Settings *stgs);
 
     /* Free the memory allocated for the presolver. */
     void free_presolver(Presolver *presolver);

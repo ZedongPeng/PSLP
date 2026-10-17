@@ -58,8 +58,7 @@ PresolvedProblem problem_from_csr(double *Ax, int *Ai, int *Ap, int n_rows,
                                   int n_cols, int nnz, double *lhs, double *rhs,
                                   double *lbs, double *ubs, double *c);
 
-/* Same with the quadratic objective matrix P (full symmetric CSR), matching
-   the argument order of new_presolver_qp. */
+/* Same with the quadratic objective matrix P (full symmetric CSR). */
 PresolvedProblem problem_from_csr_qp(double *Ax, int *Ai, int *Ap, int n_rows,
                                      int n_cols, int nnz, double *lhs, double *rhs,
                                      double *lbs, double *ubs, double *c, double *Px,

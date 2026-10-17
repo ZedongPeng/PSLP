@@ -63,8 +63,23 @@ int main()
     {
         Pp[i] = 1;
     }
-    Presolver *presolver_qp = new_presolver_qp(
-        Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    OriginalProblem problem = {};
+    problem.Ax = Ax;
+    problem.Ai = Ai;
+    problem.Ap = Ap;
+    problem.m = n_rows;
+    problem.n = n_cols;
+    problem.nnz = nnz;
+    problem.lhs = lhs;
+    problem.rhs = rhs;
+    problem.c = c;
+    problem.lbs = lbs;
+    problem.ubs = ubs;
+    problem.Px = Px;
+    problem.Pi = Pi;
+    problem.Pp = Pp;
+    problem.Pnnz = 1;
+    Presolver *presolver_qp = new_presolver_from_problem(&problem, stgs);
     assert(presolver_qp != nullptr && "QP presolver initialization failed");
     status = run_presolver(presolver_qp);
     std::cout << "QP: removed "

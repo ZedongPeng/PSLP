@@ -289,16 +289,39 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
                          const double *lbs, const double *ubs, const double *c,
                          const Settings *stgs)
 {
-    return new_presolver_qp(Ax, Ai, Ap, m, n, nnz, lhs, rhs, lbs, ubs, c, NULL, NULL,
-                            NULL, 0, stgs);
+    OriginalProblem problem = {.Ax = Ax,
+                               .Ai = Ai,
+                               .Ap = Ap,
+                               .m = m,
+                               .n = n,
+                               .nnz = nnz,
+                               .lhs = lhs,
+                               .rhs = rhs,
+                               .c = c,
+                               .lbs = lbs,
+                               .ubs = ubs};
+    return new_presolver_from_problem(&problem, stgs);
 }
 
-Presolver *new_presolver_qp(const double *Ax, const int *Ai, const int *Ap, size_t m,
-                            size_t n, size_t nnz, const double *lhs,
-                            const double *rhs, const double *lbs, const double *ubs,
-                            const double *c, const double *Px, const int *Pi,
-                            const int *Pp, size_t Pnnz, const Settings *stgs)
+Presolver *new_presolver_from_problem(const OriginalProblem *problem,
+                                      const Settings *stgs)
 {
+    const double *Ax = problem->Ax;
+    const int *Ai = problem->Ai;
+    const int *Ap = problem->Ap;
+    size_t m = problem->m;
+    size_t n = problem->n;
+    size_t nnz = problem->nnz;
+    const double *lhs = problem->lhs;
+    const double *rhs = problem->rhs;
+    const double *c = problem->c;
+    const double *lbs = problem->lbs;
+    const double *ubs = problem->ubs;
+    const double *Px = problem->Px;
+    const int *Pi = problem->Pi;
+    const int *Pp = problem->Pp;
+    size_t Pnnz = problem->Pnnz;
+
     /* the row pointers of the internal matrices are ints, so a valid CSR
        input has at most INT_MAX non-zeros */
     if (nnz > (size_t) INT_MAX || Pnnz > (size_t) INT_MAX)

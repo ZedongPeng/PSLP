@@ -29,7 +29,7 @@
    P and only when its row of P holds nothing but a positive diagonal and the
    other variable of the row (no fill-in in P); otherwise the other column is
    substituted or the row stays.
-   Test 1: structural validation of P in new_presolver_qp
+   Test 1: structural validation of P in new_presolver_from_problem
    Test 2: fix_col folds the coupling terms of P into c and removes the
            row/column of P
    Test 3: singleton equality row fixing a variable that appears in P
@@ -75,12 +75,38 @@
             problem disappears (HS21)
    Test 28: coupled dual fix tightens the bound of a variable with
             off-diagonal entries from the derivative range over the box
-   Test 29: lp_fold leaves a QP unfolded; P = 0 through new_presolver_qp
+   Test 29: lp_fold leaves a QP unfolded; P = 0 through new_presolver_from_problem
             folds as an LP
 */
 
 #define QP_TOL 1e-8
 static int counter_qp = 0;
+
+/* new_presolver_from_problem with the problem data as arguments */
+static Presolver *qp_presolver(const double *Ax, const int *Ai, const int *Ap,
+                               size_t m, size_t n, size_t nnz, const double *lhs,
+                               const double *rhs, const double *lbs,
+                               const double *ubs, const double *c, const double *Px,
+                               const int *Pi, const int *Pp, size_t Pnnz,
+                               const Settings *stgs)
+{
+    OriginalProblem problem = {.Ax = Ax,
+                               .Ai = Ai,
+                               .Ap = Ap,
+                               .m = m,
+                               .n = n,
+                               .nnz = nnz,
+                               .lhs = lhs,
+                               .rhs = rhs,
+                               .c = c,
+                               .lbs = lbs,
+                               .ubs = ubs,
+                               .Px = Px,
+                               .Pi = Pi,
+                               .Pp = Pp,
+                               .Pnnz = Pnnz};
+    return new_presolver_from_problem(&problem, stgs);
+}
 
 /*  Input validation. The constraint part is x0 + x1 <= 1, -1 <= x <= 1. */
 static char *test_1_qp()
@@ -102,8 +128,8 @@ static char *test_1_qp()
         double Px[] = {1, 0.5, 0.7, 1};
         int Pi[] = {0, 1, 0, 1};
         int Pp[] = {0, 2, 4};
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp, 4, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp, 4, stgs);
         mu_assert("asymmetric P should be rejected", presolver == NULL);
     }
 
@@ -112,8 +138,8 @@ static char *test_1_qp()
         double Px[] = {1, 0.5, 1};
         int Pi[] = {0, 1, 1};
         int Pp[] = {0, 2, 3};
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp, 3, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp, 3, stgs);
         mu_assert("upper triangular P should be rejected", presolver == NULL);
     }
 
@@ -122,8 +148,8 @@ static char *test_1_qp()
         double Px[] = {1, 2, 1, 2};
         int Pi[] = {1, 0, 0, 1};
         int Pp[] = {0, 2, 4};
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp, 4, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp, 4, stgs);
         mu_assert("unsorted P row should be rejected", presolver == NULL);
     }
 
@@ -132,8 +158,8 @@ static char *test_1_qp()
         double Px[] = {1, 1, 1};
         int Pi[] = {0, 0, 1};
         int Pp[] = {0, 2, 3};
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp, 3, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp, 3, stgs);
         mu_assert("duplicate P entry should be rejected", presolver == NULL);
     }
 
@@ -142,8 +168,8 @@ static char *test_1_qp()
         double Px[] = {1, 1};
         int Pi[] = {0, 2};
         int Pp[] = {0, 1, 2};
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp, 2, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp, 2, stgs);
         mu_assert("out of range P column should be rejected", presolver == NULL);
     }
 
@@ -154,14 +180,14 @@ static char *test_1_qp()
         int Pp_first[] = {1, 2, 3};
         int Pp_decreasing[] = {0, 2, 1};
         int Pp_last[] = {0, 1, 2};
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp_first, 3, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp_first, 3, stgs);
         mu_assert("Pp[0] != 0 should be rejected", presolver == NULL);
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp_decreasing, 1, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp_decreasing, 1, stgs);
         mu_assert("decreasing Pp should be rejected", presolver == NULL);
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp_last, 3, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp_last, 3, stgs);
         mu_assert("Pp[n] != Pnnz should be rejected", presolver == NULL);
     }
 
@@ -170,11 +196,11 @@ static char *test_1_qp()
         double Px[] = {1, 1};
         int Pi[] = {0, 1};
         int Pp[] = {0, 1, 2};
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     NULL, Pp, 2, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
+                                 NULL, Pp, 2, stgs);
         mu_assert("missing Pi should be rejected", presolver == NULL);
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, NULL, 2, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 NULL, 2, stgs);
         mu_assert("missing Pp should be rejected", presolver == NULL);
     }
 
@@ -183,8 +209,8 @@ static char *test_1_qp()
         double Px[] = {2, 0, 0, 2};
         int Pi[] = {0, 1, 0, 1};
         int Pp[] = {0, 2, 4};
-        presolver = new_presolver_qp(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px,
-                                     Pi, Pp, 4, stgs);
+        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
+                                 Pp, 4, stgs);
         mu_assert("valid P should be accepted", presolver != NULL);
         mu_assert("explicit zeros in P should be dropped",
                   presolver->prob->obj->P->nnz == 2);
@@ -231,8 +257,8 @@ static char *test_2_qp()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, 1, 3, 3, lhs, rhs, lbs, ubs,
-                                            c, Px, Pi, Pp, 5, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, 1, 3, 3, lhs, rhs, lbs, ubs, c,
+                                        Px, Pi, Pp, 5, stgs);
     mu_assert("init", presolver != NULL);
     Problem *prob = presolver->prob;
     Constraints *constraints = prob->constraints;
@@ -312,8 +338,8 @@ static char *test_3_qp()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -376,8 +402,8 @@ static char *test_4_qp()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 6, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 6, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -445,8 +471,8 @@ static char *test_5_qp()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -508,8 +534,8 @@ static char *test_6_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 1, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -569,8 +595,8 @@ static char *test_7_qp()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 1, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == UNCHANGED);
     mu_assert("reduced dims",
@@ -620,8 +646,8 @@ static char *test_8_qp()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -675,8 +701,8 @@ static char *test_9_qp()
     set_settings_false(stgs);
     stgs->primal_propagation = true;
     stgs->finite_bound_tightening = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -728,8 +754,8 @@ static char *test_10_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 1, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -787,8 +813,8 @@ static char *test_11_qp()
 
     Settings *stgs = default_settings();
     stgs->verbose = false;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 2, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 2, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -841,8 +867,8 @@ static char *test_12_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dual_fix = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 1, stgs);
     mu_assert("init", presolver != NULL);
     run_presolver(presolver);
 
@@ -867,8 +893,8 @@ static char *test_12_qp()
 
     // a multiplier on the implied bound is dropped (x0 = 2 is not at the
     // original bound 10)
-    presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs, lbs, ubs,
-                                 c, Px, Pi, Pp, 1, stgs);
+    presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 3, lhs, rhs, lbs, ubs, c,
+                             Px, Pi, Pp, 1, stgs);
     mu_assert("init 2", presolver != NULL);
     run_presolver(presolver);
     double x2[] = {2, 0, 1};
@@ -921,9 +947,8 @@ static char *test_15_qp()
 
         Settings *stgs = default_settings();
         set_settings_false(stgs);
-        Presolver *presolver =
-            new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs, lbs, ubs, c,
-                             Px, Pi, Pp, 7, stgs);
+        Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
+                                            lbs, ubs, c, Px, Pi, Pp, 7, stgs);
         mu_assert("init", presolver != NULL);
         mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -977,8 +1002,8 @@ static char *test_16_qp()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 5, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 5, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1028,8 +1053,8 @@ static char *test_17_qp()
 
     Settings *stgs = default_settings();
     set_settings_false(stgs);
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 3, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 3, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1088,8 +1113,8 @@ static char *test_18_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 2, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 2, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1184,8 +1209,8 @@ static char *test_20_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 7, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 7, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == UNCHANGED);
 
@@ -1239,8 +1264,8 @@ static char *test_21_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 5, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 5, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1314,8 +1339,8 @@ static char *test_22_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 3, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 3, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1380,8 +1405,8 @@ static char *test_23_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dual_fix = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 7, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 7, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1450,8 +1475,8 @@ static char *test_24_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dual_fix = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 5, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 5, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1514,8 +1539,8 @@ static char *test_25_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1578,8 +1603,8 @@ static char *test_26_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dton_eq = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 7, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 7, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1645,8 +1670,8 @@ static char *test_27_qp()
     int Pp[] = {0, 1, 2};
 
     Settings *stgs = default_settings();
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 2, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 2, stgs);
     mu_assert("init", presolver != NULL);
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
@@ -1701,8 +1726,8 @@ static char *test_28_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->dual_fix = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 4, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 4, stgs);
     mu_assert("init", presolver != NULL);
     run_presolver(presolver);
 
@@ -1735,7 +1760,7 @@ static char *test_28_qp()
     0 <= x <= 1  fold to one copy as an LP (test_fold_presolver_lift), but with
     P00 = 2 on the first copy nothing folds, though lp_fold is enabled. KKT
     point: x = (0, 1) and z = (1, 0) per copy, y = -2. With P = 0 through
-    new_presolver_qp the fold runs as for an LP. */
+    new_presolver_from_problem the fold runs as for an LP. */
 static char *test_29_qp()
 {
     double Ax[] = {1, 1, 1, 1, 1, 1};
@@ -1754,8 +1779,8 @@ static char *test_29_qp()
     Settings *stgs = default_settings();
     set_settings_false(stgs);
     stgs->lp_fold = true;
-    Presolver *presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs,
-                                            lbs, ubs, c, Px, Pi, Pp, 1, stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 1, stgs);
     mu_assert("init", presolver != NULL);
     const PresolveStats *stats = presolver->stats;
     mu_assert("not folded", stats->n_rows_folded == 3 && stats->n_cols_folded == 6 &&
@@ -1784,8 +1809,8 @@ static char *test_29_qp()
     free_presolver(presolver);
 
     // the same problem as an LP through the QP entry point folds to one copy
-    presolver = new_presolver_qp(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs, ubs,
-                                 c, NULL, NULL, NULL, 0, stgs);
+    presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 6, lhs, rhs, lbs, ubs, c,
+                             NULL, NULL, NULL, 0, stgs);
     mu_assert("init lp", presolver != NULL);
     mu_assert("folded", presolver->stats->n_rows_folded == 1 &&
                             presolver->stats->n_cols_folded == 2 &&
