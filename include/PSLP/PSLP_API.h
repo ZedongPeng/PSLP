@@ -53,6 +53,10 @@ extern "C"
         bool lp_fold;
         double max_time;
         bool verbose;
+        /* Threads PSLP may use. 0 is automatic: the smaller of 8 and the
+           processors the system reports. Clamped to [1, 64]. Ignored on
+           Windows. */
+        int n_threads;
     } Settings;
 
     /* struct corresponding to the presolved problem */

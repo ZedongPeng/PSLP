@@ -49,6 +49,8 @@
 #include "glbopts.h"
 #include "iVec.h"
 #include "pslp_thread.h"
+#include "radix_sort.h"
+#include "thread_pool.h"
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,6 +100,7 @@ Settings *default_settings(void)
     stgs->lp_fold = false;
     stgs->max_time = 60.0;
     stgs->verbose = true;
+    stgs->n_threads = 0;
     return stgs;
 }
 
@@ -276,6 +279,14 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
         goto cleanup;
     }
 
+    /* The pool of the fold and of the parallel sort. Without the fold, a
+       problem below the sort's threshold never uses workers, so it gets none. */
+    bool needs_workers = stgs->lp_fold || n_rows >= PARALLEL_SORT_THRESHOLD ||
+                         n_cols >= PARALLEL_SORT_THRESHOLD;
+    work->pool = thread_pool_new(
+        needs_workers ? thread_pool_resolve_n_threads(stgs->n_threads) - 1 : 0);
+    if (!work->pool) goto cleanup;
+
     memcpy(lhs_copy, lhs, n_rows * sizeof(double));
     memcpy(rhs_copy, rhs, n_rows * sizeof(double));
     memcpy(c_copy, c, n_cols * sizeof(double));
@@ -320,7 +331,7 @@ Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t 
         fold_options.max_rounds = LP_FOLD_MAX_ROUNDS;
         clock_gettime(CLOCK_MONOTONIC, &fold_timer.start);
         if (fold_problem(&A, AT, lhs_copy, rhs_copy, row_tags, bounds, col_tags,
-                         c_copy, &fold_options, &work->fold_maps, NULL))
+                         c_copy, &fold_options, work->pool, &work->fold_maps, NULL))
         {
             free_matrix(AT);
             AT = transpose(A, work->iwork_n_cols,
