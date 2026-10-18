@@ -62,6 +62,10 @@ extern "C"
         bool lp_fold;
         double max_time;
         bool verbose;
+        /* Threads PSLP may use. 0 is automatic: the smaller of 8 and the
+           processors the system reports. Clamped to [1, 64]. Ignored on
+           Windows. */
+        int n_threads;
     } Settings;
 
     /* struct corresponding to the problem to presolve,
@@ -137,7 +141,7 @@ extern "C"
          - 'reduced_prob' contains the presolved problem after running
             'run_presolver'
          - 'sol' contains the solution to the original problem after running
-            'postsolve'
+            'postsolve' (it is NULL until the first postsolve call)
     */
     typedef struct
     {

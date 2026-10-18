@@ -49,6 +49,8 @@
 #include "glbopts.h"
 #include "iVec.h"
 #include "pslp_thread.h"
+#include "radix_sort.h"
+#include "thread_pool.h"
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,6 +100,7 @@ Settings *default_settings(void)
     stgs->lp_fold = false;
     stgs->max_time = 60.0;
     stgs->verbose = true;
+    stgs->n_threads = 0;
     return stgs;
 }
 
@@ -225,65 +228,6 @@ void presolver_clean_up(clean_up_scope scope)
     free_presolver(scope.presolver);
 }
 
-/* The outcome of the fold, with the dimensions before and after when it was
-   applied. */
-static void print_fold_message(bool applied, FoldReason reason,
-                               const FoldStats *stats, size_t n_rows, size_t n_cols,
-                               size_t nnz, const Matrix *A)
-{
-    printf("PSLP lp_fold: %s (%d rounds, %.3f seconds)",
-           applied ? "applied" : fold_reason_string(reason), stats->rounds,
-           stats->time);
-    if (applied)
-    {
-        printf(", rows %zu -> %zu, cols %zu -> %zu, nnz %zu -> %zu", n_rows, A->m,
-               n_cols, A->n, nnz, A->nnz);
-    }
-    printf("\n");
-}
-
-/* Finds and applies the fold. Returns true when the problem was folded: *A is
-   then the folded matrix (the given one freed), the line data is compacted in
-   place and *maps holds the maps; the caller rebuilds AT. Otherwise nothing
-   is touched and *maps is NULL. */
-static bool run_fold(Matrix **A, const Matrix *AT, double *lhs, double *rhs,
-                     RowTag *row_tags, Bound *bounds, ColTag *col_tags, double *c,
-                     bool verbose, FoldMaps **maps)
-{
-    FoldOptions options;
-    options.min_reduction = LP_FOLD_MIN_REDUCTION;
-    options.work_budget = LP_FOLD_WORK_BUDGET;
-    options.max_rounds = LP_FOLD_MAX_ROUNDS;
-
-    size_t n_rows = (*A)->m, n_cols = (*A)->n, nnz = (*A)->nnz;
-    FoldStats stats;
-    Matrix *folded = NULL;
-    FoldReason reason =
-        fold_detect(*A, AT, lhs, rhs, bounds, c, &options, maps, &stats);
-    if (reason == FOLD_FOLDABLE)
-    {
-        reason =
-            fold_apply(*A, lhs, rhs, row_tags, bounds, col_tags, c, *maps, &folded);
-    }
-    bool applied = reason == FOLD_FOLDABLE;
-    if (applied)
-    {
-        free_matrix(*A);
-        *A = folded;
-    }
-    else
-    {
-        fold_maps_free(*maps);
-        *maps = NULL;
-    }
-
-    if (verbose)
-    {
-        print_fold_message(applied, reason, &stats, n_rows, n_cols, nnz, *A);
-    }
-    return applied;
-}
-
 Presolver *new_presolver(const double *Ax, const int *Ai, const int *Ap, size_t m,
                          size_t n, size_t nnz, const double *lhs, const double *rhs,
                          const double *lbs, const double *ubs, const double *c,
@@ -377,6 +321,14 @@ Presolver *new_presolver_from_problem(const OriginalProblem *problem,
         goto cleanup;
     }
 
+    /* The pool of the fold and of the parallel sort. Without the fold, a
+       problem below the sort's threshold never uses workers, so it gets none. */
+    bool needs_workers = stgs->lp_fold || n_rows >= PARALLEL_SORT_THRESHOLD ||
+                         n_cols >= PARALLEL_SORT_THRESHOLD;
+    work->pool = thread_pool_new(
+        needs_workers ? thread_pool_resolve_n_threads(stgs->n_threads) - 1 : 0);
+    if (!work->pool) goto cleanup;
+
     memcpy(lhs_copy, lhs, n_rows * sizeof(double));
     memcpy(rhs_copy, rhs, n_rows * sizeof(double));
     memcpy(c_copy, c, n_cols * sizeof(double));
@@ -426,9 +378,13 @@ Presolver *new_presolver_from_problem(const OriginalProblem *problem,
     nnz_stripped = A->nnz; /* after the explicit zeros were dropped */
     if (lp_fold)
     {
+        FoldOptions fold_options;
+        fold_options.min_reduction = LP_FOLD_MIN_REDUCTION;
+        fold_options.work_budget = LP_FOLD_WORK_BUDGET;
+        fold_options.max_rounds = LP_FOLD_MAX_ROUNDS;
         clock_gettime(CLOCK_MONOTONIC, &fold_timer.start);
-        if (run_fold(&A, AT, lhs_copy, rhs_copy, row_tags, bounds, col_tags, c_copy,
-                     stgs->verbose, &work->fold_maps))
+        if (fold_problem(&A, AT, lhs_copy, rhs_copy, row_tags, bounds, col_tags,
+                         c_copy, &fold_options, work->pool, &work->fold_maps, NULL))
         {
             free_matrix(AT);
             AT = transpose(A, work->iwork_n_cols,
@@ -470,6 +426,7 @@ Presolver *new_presolver_from_problem(const OriginalProblem *problem,
     presolver = (Presolver *) ps_malloc(1, sizeof(Presolver));
     obj = objective_new(c_copy, P);
     if (!presolver || !obj) goto cleanup;
+    presolver->sol = NULL; /* allocated by the first postsolve call */
     presolver->stgs = stgs;
     presolver->prob = new_problem(constraints, obj);
     presolver->stats = init_stats(n_rows, n_cols, nnz);
@@ -481,12 +438,6 @@ Presolver *new_presolver_from_problem(const OriginalProblem *problem,
     presolver->reduced_prob =
         (PresolvedProblem *) ps_calloc(1, sizeof(PresolvedProblem));
     DEBUG(run_debugger_problem(presolver->prob, false));
-
-    // ---------------------------------------------------------------------------
-    //           Allocate space for returning the solution
-    // ---------------------------------------------------------------------------
-    presolver->sol = new_solution(n_rows, n_cols);
-    if (!presolver->sol) goto cleanup;
 
     clock_gettime(CLOCK_MONOTONIC, &timer.end);
     presolver->stats->time_lp_fold = fold_time;
@@ -798,8 +749,8 @@ static inline void print_end_message(const Matrix *A, const PresolveStats *stats
 {
     printf("Presolved problem: %zu rows, %zu columns, %zu nnz, %zu nnz in P\n", A->m,
            A->n, A->nnz, stats->Pnnz_reduced);
-    printf("PSLP init & run time : %.3f seconds, %.3f \n", stats->time_init,
-           stats->time_presolve);
+    printf("PSLP init, fold & run time : %.3f, %.3f, %.3f seconds\n",
+           stats->time_init, stats->time_lp_fold, stats->time_presolve);
 }
 
 static inline void print_infeas_or_unbnd_message(PresolveStatus status)
@@ -1005,12 +956,36 @@ void free_presolver_reduced_problem(Presolver *presolver)
     PS_FREE(reduced_prob->ubs);
 }
 
+/* Allocates presolver->sol on the first postsolve call. Returns false (and
+   prints an error) if the allocation fails. */
+static bool ensure_solution(Presolver *presolver)
+{
+    if (presolver->sol)
+    {
+        return true;
+    }
+
+    presolver->sol = new_solution(presolver->stats->n_rows_original,
+                                  presolver->stats->n_cols_original);
+    if (!presolver->sol)
+    {
+        fprintf(stderr, "PSLP error: out of memory when allocating the "
+                        "postsolved solution. Outputs are left untouched. \n");
+        return false;
+    }
+    return true;
+}
+
 void postsolve(Presolver *presolver, const double *x, const double *y,
                const double *z)
 {
     Timer timer;
-    Solution *sol = presolver->sol;
     PresolveStats *stats = presolver->stats;
+    if (!ensure_solution(presolver))
+    {
+        return;
+    }
+    Solution *sol = presolver->sol;
     State *data = presolver->prob->constraints->state;
     PostsolveInfo *postsolve_info = data->postsolve_info;
     const FoldMaps *fold_maps = data->work->fold_maps;
@@ -1057,7 +1032,6 @@ void postsolve_primal_infeas_ray(Presolver *presolver, const double *y,
                                  double *y_orig)
 {
     Timer timer;
-    Solution *sol = presolver->sol;
     PresolveStats *stats = presolver->stats;
     State *data = presolver->prob->constraints->state;
     PostsolveInfo *postsolve_info = data->postsolve_info;
@@ -1079,6 +1053,11 @@ void postsolve_primal_infeas_ray(Presolver *presolver, const double *y,
                         "free_presolver_reduced_problem! Don't do this! \n");
         return;
     }
+    if (!ensure_solution(presolver))
+    {
+        return;
+    }
+    Solution *sol = presolver->sol;
     z = (double *) ps_malloc(len_z, sizeof(double));
     assert(z != NULL);
 
@@ -1106,7 +1085,6 @@ void postsolve_primal_infeas_ray(Presolver *presolver, const double *y,
 void postsolve_dual_infeas_ray(Presolver *presolver, const double *x, double *x_orig)
 {
     Timer timer;
-    Solution *sol = presolver->sol;
     PresolveStats *stats = presolver->stats;
     State *data = presolver->prob->constraints->state;
     PostsolveInfo *postsolve_info = data->postsolve_info;
@@ -1117,6 +1095,11 @@ void postsolve_dual_infeas_ray(Presolver *presolver, const double *x, double *x_
                         "with lp_fold yet! x_orig is left untouched. \n");
         return;
     }
+    if (!ensure_solution(presolver))
+    {
+        return;
+    }
+    Solution *sol = presolver->sol;
 
     clock_gettime(CLOCK_MONOTONIC, &timer.start);
     postsolver_update(postsolve_info, stats->n_cols_reduced, stats->n_rows_reduced,

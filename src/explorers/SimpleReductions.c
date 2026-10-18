@@ -312,7 +312,7 @@ static inline RowTag check_activity(const Activity *act, double lhs, double rhs,
     // -------------------------------------------------------------------------
     if (!HAS_TAG(row_tag, R_TAG_RHS_INF))
     {
-        if (act->n_inf_min == 0 && act->min >= rhs + FEAS_TOL)
+        if (act->n_inf_min == 0 && IS_INFEAS_GT(act->min, rhs))
         {
             return R_TAG_INFEAS;
         }
@@ -328,7 +328,7 @@ static inline RowTag check_activity(const Activity *act, double lhs, double rhs,
     // -------------------------------------------------------------------------
     if (!HAS_TAG(row_tag, R_TAG_LHS_INF))
     {
-        if (act->n_inf_max == 0 && act->max <= lhs - FEAS_TOL)
+        if (act->n_inf_max == 0 && IS_INFEAS_LT(act->max, lhs))
         {
             return R_TAG_INFEAS;
         }
@@ -502,8 +502,8 @@ PresolveStatus remove_empty_rows(const Constraints *constraints)
         assert(row_sizes[row] == 0);
 
         bool infeasible =
-            (!HAS_TAG(rtags[row], R_TAG_LHS_INF) && lhs[row] >= FEAS_TOL) ||
-            (!HAS_TAG(rtags[row], R_TAG_RHS_INF) && rhs[row] <= -FEAS_TOL);
+            (!HAS_TAG(rtags[row], R_TAG_LHS_INF) && IS_INFEAS_GT(lhs[row], 0.0)) ||
+            (!HAS_TAG(rtags[row], R_TAG_RHS_INF) && IS_INFEAS_LT(rhs[row], 0.0));
 
         if (infeasible)
         {
@@ -753,7 +753,7 @@ PresolveStatus remove_variables_with_close_bounds(Problem *prob)
 
         assert(!HAS_TAG(col_tags[ii], C_TAG_INACTIVE));
 
-        if (bounds[ii].lb > bounds[ii].ub + FEAS_TOL)
+        if (IS_INFEAS_GT(bounds[ii].lb, bounds[ii].ub))
         {
             return INFEASIBLE;
         }
@@ -763,8 +763,18 @@ PresolveStatus remove_variables_with_close_bounds(Problem *prob)
         // objective contribution to the offset twice.
         if (col_sizes[ii] > 0 && IS_EQUAL_FEAS_TOL(bounds[ii].lb, bounds[ii].ub))
         {
-            // no need to check return value since bounds are equal
-            fix_col(prob, (int) ii, bounds[ii].lb);
+            // fix at integral bound or at midpoint
+            double lb = bounds[ii].lb, ub = bounds[ii].ub;
+            double val = 0.5 * (lb + ub);
+            if (IS_INTEGRAL(lb))
+            {
+                val = lb;
+            }
+            else if (IS_INTEGRAL(ub))
+            {
+                val = ub;
+            }
+            fix_col(prob, (int) ii, val);
         }
     }
 
