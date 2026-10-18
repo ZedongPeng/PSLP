@@ -97,7 +97,7 @@ Settings *default_settings(void)
     stgs->dual_fix = true;
     stgs->finite_bound_tightening = true;
     stgs->relax_bounds = false;
-    stgs->lp_fold = false;
+    stgs->lp_fold = true;
     stgs->max_time = 60.0;
     stgs->verbose = true;
     stgs->n_threads = 0;
