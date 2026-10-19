@@ -519,6 +519,52 @@ PresolveStatus remove_empty_rows(const Constraints *constraints)
     return UNCHANGED;
 }
 
+/* Fixes an empty column k that appears in P. With only a positive diagonal
+   in P the objective in x_k is (1/2) P_kk x_k^2 + c_k x_k, so
+   x_k = clip(-c_k / P_kk, lb, ub). Returns false, leaving the column for the
+   dual fix, when its row of P is not a diagonal alone or the unconstrained
+   minimiser is huge (as in P_dual_fix). */
+static bool fix_empty_P_col(Problem *prob, int k)
+{
+    const State *state = prob->constraints->state;
+    const Matrix *P = prob->obj->P;
+    ColTag *col_tags = prob->constraints->col_tags;
+    Bound *bounds = prob->constraints->bounds;
+    const double *c = prob->obj->c;
+    double Pkk;
+
+    if (!diagonal_only_P_entry(P, state->P_row_sizes, k, &Pkk))
+    {
+        return false;
+    }
+
+    double val = -c[k] / Pkk;
+    if (IS_HUGE(val))
+    {
+        return false;
+    }
+    if (!HAS_TAG(col_tags[k], C_TAG_LB_INF) && val < bounds[k].lb)
+    {
+        val = bounds[k].lb;
+    }
+    else if (!HAS_TAG(col_tags[k], C_TAG_UB_INF) && val > bounds[k].ub)
+    {
+        val = bounds[k].ub;
+    }
+
+    bounds[k].lb = val;
+    bounds[k].ub = val;
+
+    // for the postsolve zk = ck + Pkk xk; as in fix_col the record is saved
+    // before the objective update
+    save_retrieval_fixed_col(state->postsolve_info, k, val, c[k], NULL, NULL, 0,
+                             P->x + P->p[k].start, P->i + P->p[k].start, 1);
+    fix_var_in_obj(prob, k, val);
+    UPDATE_TAG(col_tags[k], C_TAG_FIXED);
+    state->col_sizes[k] = SIZE_INACTIVE_COL;
+    return true;
+}
+
 PresolveStatus remove_empty_cols(Problem *prob)
 {
     iVec *empty_cols = prob->constraints->state->empty_cols;
@@ -552,46 +598,13 @@ PresolveStatus remove_empty_cols(Problem *prob)
 
         assert(col_sizes[k] == 0 && !HAS_TAG(col_tags[k], C_TAG_INACTIVE));
 
-        // ---------------------------------------------------------------
-        // With only a positive diagonal in P the objective in x_k is
-        // (1/2) P_kk x_k^2 + c_k x_k, so x_k = clip(-c_k / P_kk, lb, ub).
-        // ---------------------------------------------------------------
+        // a column in P is fixed only when its row of P is a diagonal alone
         if (col_in_P(state, k))
         {
-            const Matrix *P = prob->obj->P;
-            double Pkk;
-            if (!diagonal_only_P_entry(P, state->P_row_sizes, k, &Pkk))
+            if (!fix_empty_P_col(prob, k))
             {
                 empty_cols->data[n_kept++] = k;
-                continue;
             }
-
-            // as in P_dual_fix, a huge unconstrained minimiser is left alone
-            val = -c[k] / Pkk;
-            if (IS_HUGE(val))
-            {
-                empty_cols->data[n_kept++] = k;
-                continue;
-            }
-            if (!HAS_TAG(col_tags[k], C_TAG_LB_INF) && val < bounds[k].lb)
-            {
-                val = bounds[k].lb;
-            }
-            else if (!HAS_TAG(col_tags[k], C_TAG_UB_INF) && val > bounds[k].ub)
-            {
-                val = bounds[k].ub;
-            }
-
-            bounds[k].lb = val;
-            bounds[k].ub = val;
-
-            // for the postsolve zk = ck + Pkk xk; as in fix_col the record is
-            // saved before the objective update
-            save_retrieval_fixed_col(postsolve_info, k, val, c[k], NULL, NULL, 0,
-                                     P->x + P->p[k].start, P->i + P->p[k].start, 1);
-            fix_var_in_obj(prob, k, val);
-            UPDATE_TAG(col_tags[k], C_TAG_FIXED);
-            col_sizes[k] = SIZE_INACTIVE_COL;
             continue;
         }
 
