@@ -73,12 +73,12 @@ extern "C"
     } Settings;
 
     /* struct corresponding to a problem min (1/2) x'Px + c'x + obj_offset s.t.
-           lhs <= Ax <= rhs,  lbs <= x <= ubs. It is used both for the problem
-           given to the presolver and for the reduced problem returned in
-           'reduced_prob'. For an LP, set P to NULL and Pnnz to 0. The arrays of
-           the reduced problem are owned by the presolver and stay valid until
-           'free_presolver_reduced_problem' or 'free_presolver' is called. The
-           user must not modify or free them. */
+       lhs <= Ax <= rhs,  lbs <= x <= ubs. It is used both for the problem given
+       to the presolver and for the reduced problem returned in 'reduced_prob'.
+       For an LP, set P to NULL and Pnnz to 0. The arrays of the reduced problem
+       are owned by the presolver and stay valid until
+       'free_presolver_reduced_problem' or 'free_presolver' is called. The user
+       must not modify or free them. */
     typedef struct
     {
         /* CSR format of a matrix A of size m x n with nnz non-zeros */
@@ -218,10 +218,7 @@ extern "C"
 
        x is an unbounded direction: a recession direction of the constraint
        set with Px = 0 and c'x < 0 (for an LP simply c'x < 0); no sign
-       convention involved. The recovered ray satisfies the same conditions
-       for the original problem: fixed variables get a zero component and a
-       substitution is a linear change of variables, so d'Pd = 0 carries
-       over; for a PSD P that forces Pd = 0, and then c'd carries over too. */
+       convention involved. */
     void postsolve_dual_infeas_ray(Presolver *presolver, const double *x,
                                    double *x_orig);
 

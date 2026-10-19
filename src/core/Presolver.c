@@ -337,7 +337,7 @@ Presolver *new_presolver_from_problem(const ProblemData *problem,
     // ---------------------------------------------------------------------------
     if (Pnnz > 0)
     {
-        P = matrix_new_no_extra_space(Px, Pi, Pp, n_cols, n_cols, Pnnz);
+        P = matrix_new(Px, Pi, Pp, n_cols, n_cols, Pnnz);
         if (!P) goto cleanup;
         if (!matrix_is_symmetric(P)) goto cleanup;
         if (P->nnz == 0)
