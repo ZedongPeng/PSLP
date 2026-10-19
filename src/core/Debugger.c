@@ -586,8 +586,7 @@ bool empty_cols_drained(const Problem *prob)
             return false;
         }
         double Pkk;
-        if (diagonal_only_P_entry(prob->obj->P, state->P_row_sizes, k, &Pkk) &&
-            !IS_HUGE(-prob->obj->c[k] / Pkk))
+        if (diagonal_only_P_entry(prob->obj->P, state->P_row_sizes, k, &Pkk))
         {
             return false;
         }

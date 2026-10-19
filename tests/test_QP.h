@@ -69,8 +69,8 @@
             only stays (no substitution with fill-in or into a coupled row)
    Test 29: lp_fold leaves a QP unfolded; P = 0 through new_presolver_from_problem
             folds as an LP
-   Test 31: huge minimiser of an empty diagonal-only column: left alone when
-            interior, fixed at the bound when outside the box
+   Test 31: huge minimiser of an empty diagonal-only column: fixed at the
+            minimiser, or at the bound when the minimiser is outside the box
 */
 
 #define QP_TOL 1e-8
@@ -1573,10 +1573,10 @@ static char *test_30_qp()
 
 /*  Huge minimiser of an empty diagonal-only column. P = diag(1e-12, 1e-12, 0, 0),
     c = (1, 1, 1, 1), x2 + x3 >= 1 with 0 <= x2, x3 <= 1. x0 and x1 are empty
-    in A with minimiser -1e12. x0 has no lower bound, so the minimiser is
-    interior and huge: the column is left for the solver. x1 has lower bound 0:
-    the objective is increasing on the box and x1 is fixed at 0 whatever the
-    minimiser. */
+    in A with minimiser -1e12. x0 has no lower bound and is fixed at the
+    minimiser, which only enters the offset (-c0^2 / (2 P00) = -5e11). x1 has
+    lower bound 0: the objective is increasing on the box and x1 is fixed
+    there. */
 static char *test_31_qp()
 {
     double Ax[] = {1, 1};
@@ -1600,14 +1600,16 @@ static char *test_31_qp()
     mu_assert("status", run_presolver(presolver) == REDUCED);
 
     const ProblemData *red = presolver->reduced_prob;
-    mu_assert("x0 kept, x1 fixed", red->m == 1 && red->n == 3 && red->Pnnz == 1);
-    mu_assert("x0 still free", red->lbs[0] == -INF && red->ubs[0] == INF);
-    mu_assert("reduced c", red->c[0] == 1.0 && red->c[1] == 1.0 && red->c[2] == 1.0);
+    mu_assert("x0 and x1 fixed", red->m == 1 && red->n == 2 && red->Pnnz == 0);
+    mu_assert("reduced offset", fabs(red->obj_offset + 5e11) <= 1e-3 * 5e11);
+    mu_assert("reduced c", red->c[0] == 1.0 && red->c[1] == 1.0);
 
-    double x[] = {-1e12, 1, 0};
+    double x[] = {1, 0};
     double y[] = {1};
-    double z[] = {0, 0, 0};
+    double z[] = {0, 0};
     postsolve(presolver, x, y, z);
+    mu_assert("x0 at the minimiser", fabs(presolver->sol->x[0] + 1e12) <= 1.0 &&
+                                         fabs(presolver->sol->z[0]) <= 1e-6);
     mu_assert("x1 at its lower bound",
               presolver->sol->x[1] == 0.0 && presolver->sol->z[1] == 1.0);
 
