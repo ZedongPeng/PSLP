@@ -131,13 +131,23 @@ bool P_row_has_diagonal(const Matrix *P, const int *P_row_sizes, int k)
     return sorted_find(P->i + P->p[k].start, P_row_sizes[k], k) >= 0;
 }
 
+/* c + upd, snapped to zero when the sum is rounding noise relative to its
+   terms. An exact cancellation leaves a residue whose sign is noise, and
+   downstream sign tests (e.g. the unboundedness check in process_colston_ineq)
+   must never see it. */
+static double add_cancelling(double c, double upd)
+{
+    double sum = c + upd;
+    return (ABS(sum) <= CANCEL_TOL_REL * MAX(ABS(c), ABS(upd))) ? 0.0 : sum;
+}
+
 void fix_var_in_obj(Problem *prob, int col, double value)
 {
     Objective *obj = prob->obj;
     Matrix *P = obj->P;
+    obj->offset += obj->c[col] * value;
     if (P == NULL)
     {
-        obj->offset += obj->c[col] * value;
         return;
     }
 
@@ -145,8 +155,6 @@ void fix_var_in_obj(Problem *prob, int col, double value)
     int start = P->p[col].start;
     int end = P->p[col].end;
     assert(P_row_sizes[col] == end - start);
-
-    obj->offset += obj->c[col] * value;
 
     for (int j = start; j < end; ++j)
     {
@@ -159,14 +167,7 @@ void fix_var_in_obj(Problem *prob, int col, double value)
             continue;
         }
 
-        // same cancellation rule as sub_var_in_obj
-        double upd = Pkl * value;
-        double new_c = obj->c[l] + upd;
-        if (ABS(new_c) <= CANCEL_TOL_REL * MAX(ABS(obj->c[l]), ABS(upd)))
-        {
-            new_c = 0.0;
-        }
-        obj->c[l] = new_c;
+        obj->c[l] = add_cancelling(obj->c[l], Pkl * value);
 
         // P is symmetric, so P_lk exists in row l
         RowView row_l = new_rowview(P->x + P->p[l].start, P->i + P->p[l].start,
@@ -207,17 +208,7 @@ void sub_var_in_obj(Problem *prob, const double *vals, const int *cols, int len,
     double ratio = obj->c[k] / aik;
     for (int i = 0; i < len; ++i)
     {
-        double upd = ratio * vals[i];
-        double new_c = obj->c[cols[i]] - upd;
-
-        /* Exact cancellation leaves a residue whose sign is rounding noise;
-           downstream sign tests (e.g. the unboundedness check in
-           process_colston_ineq) must never see it. */
-        if (ABS(new_c) <= CANCEL_TOL_REL * MAX(ABS(obj->c[cols[i]]), ABS(upd)))
-        {
-            new_c = 0.0;
-        }
-        obj->c[cols[i]] = new_c;
+        obj->c[cols[i]] = add_cancelling(obj->c[cols[i]], -ratio * vals[i]);
     }
 
     obj->offset += rhs * ratio;
@@ -231,14 +222,13 @@ void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
     obj->c[subst] = 0.0;
 }
 
-void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift,
-                              double Pkk)
+void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift)
 {
     Objective *obj = prob->obj;
     Matrix *P = obj->P;
     int *P_row_sizes = prob->constraints->state->P_row_sizes;
-    assert(P_row_sizes[k] == 1 && P->i[P->p[k].start] == k &&
-           P->x[P->p[k].start] == Pkk);
+    assert(P_row_sizes[k] == 1 && P->i[P->p[k].start] == k);
+    double Pkk = P->x[P->p[k].start];
 
     /* (1/2) P_kk x_k^2 + c_k x_k with x_k = shift + mult x_t */
     obj->c[t] += mult * (obj->c[k] + Pkk * shift);

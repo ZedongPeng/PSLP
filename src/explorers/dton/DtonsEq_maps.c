@@ -148,8 +148,7 @@ bool dton_claim(Problem *prob, DtonWorkspace *dton_work, int *deferred,
         double Pkk[2] = {0.0, 0.0};
         if (in_P0 && in_P1)
         {
-            /* a P column folds into the other column's diagonal, which every
-               column of a convex P has; the input check only enforces symmetry */
+            /* only symmetry is checked on input, so a diagonal is not given */
             sub0 = diagonal_only_P_entry(P, P_row_sizes, col0, Pkk) &&
                    P_row_has_diagonal(P, P_row_sizes, col1);
             sub1 = diagonal_only_P_entry(P, P_row_sizes, col1, Pkk + 1) &&

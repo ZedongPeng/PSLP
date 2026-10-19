@@ -343,7 +343,7 @@ void dton_apply(Problem *prob, DtonWorkspace *dton_work, int *deferred,
         if (rec->Pkk != 0.0)
         {
             sub_diag_var_in_obj_dton(prob, rec->k, rec->target, rec->mult,
-                                     rec->shift, rec->Pkk);
+                                     rec->shift);
         }
         else if (obj->c[rec->k] != 0.0)
         {

@@ -87,7 +87,7 @@ void sub_var_in_obj_dton(Objective *obj, int subst, int stay, double mult,
      c_t += mult (c_k + P_kk shift),  offset += shift (c_k + (1/2) P_kk shift),
      P_tt += mult^2 P_kk,
    then empties row k of P. The caller marks it inactive. */
-void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult, double shift,
-                              double Pkk);
+void sub_diag_var_in_obj_dton(Problem *prob, int k, int t, double mult,
+                              double shift);
 
 #endif // CORE_PROBLEM_H
