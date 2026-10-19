@@ -71,6 +71,8 @@
             folds as an LP
    Test 31: huge minimiser of an empty diagonal-only column: fixed at the
             minimiser, or at the bound when the minimiser is outside the box
+   Test 32: the same for a diagonal-only column without locks (a column in a
+            free row), through the dual fix
 */
 
 #define QP_TOL 1e-8
@@ -1618,6 +1620,53 @@ static char *test_31_qp()
     return 0;
 }
 
+/*  Huge minimiser of a diagonal-only column without locks (P_dual_fix).
+    min. (1/2) 1e-12 x0^2 + x0 + x1 + x2  s.t.  -inf <= x0 + x1 <= inf,
+    x1 + x2 >= 1, x0 free, 0 <= x1, x2 <= 1. Only dual_fix is enabled. x0 sits
+    in a free row, so it has no locks and is fixed at its minimiser -1e12,
+    which only enters the offset; the free row then collapses to a singleton
+    row and goes. x1 and x2 keep their down-locks and stay. */
+static char *test_32_qp()
+{
+    double Ax[] = {1, 1, 1, 1};
+    int Ai[] = {0, 1, 1, 2};
+    int Ap[] = {0, 2, 4};
+    int n_rows = 2, n_cols = 3;
+    double lhs[] = {-INF, 1};
+    double rhs[] = {INF, INF};
+    double lbs[] = {-INF, 0, 0};
+    double ubs[] = {INF, 1, 1};
+    double c[] = {1, 1, 1};
+    double Px[] = {1e-12};
+    int Pi[] = {0};
+    int Pp[] = {0, 1, 1, 1};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    stgs->dual_fix = true;
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 4, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 1, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    const ProblemData *red = presolver->reduced_prob;
+    mu_assert("x0 fixed, free row gone",
+              red->m == 1 && red->n == 2 && red->Pnnz == 0);
+    mu_assert("reduced offset", fabs(red->obj_offset + 5e11) <= 1e-3 * 5e11);
+
+    double x[] = {1, 0};
+    double y[] = {1};
+    double z[] = {0, 0};
+    postsolve(presolver, x, y, z);
+    mu_assert("x0 at the minimiser", fabs(presolver->sol->x[0] + 1e12) <= 1.0 &&
+                                         fabs(presolver->sol->z[0]) <= 1e-6);
+    mu_assert("free row multiplier", presolver->sol->y[0] == 0.0);
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
@@ -1645,6 +1694,7 @@ static const char *all_tests_qp()
     mu_run_test(test_29_qp, counter_qp);
     mu_run_test(test_30_qp, counter_qp);
     mu_run_test(test_31_qp, counter_qp);
+    mu_run_test(test_32_qp, counter_qp);
     return 0;
 }
 

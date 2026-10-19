@@ -152,7 +152,9 @@ static inline void P_dual_fix(Problem *prob, int col)
         return;
     }
 
-    // diagonal-only row without locks: xk = clip(x*, lb, ub)
+    // diagonal-only row without locks: xk = clip(x*, lb, ub). No locks means
+    // every row of the column has two infinite sides, so the value only
+    // reaches the offset and the activities of free rows; its size is immaterial.
     if (lock.down == 0 && lock.up == 0 && constraints->state->P_row_sizes[col] == 1)
     {
         double val = -prob->obj->c[col] / Pkk;
@@ -163,11 +165,6 @@ static inline void P_dual_fix(Problem *prob, int col)
         else if (!ub_inf && val > ub)
         {
             val = ub;
-        }
-        else if (IS_HUGE(val))
-        {
-            // a huge interior minimiser (tiny diagonal) is left for the solver
-            return;
         }
         fix_col(prob, col, val);
         return;
@@ -212,9 +209,7 @@ PresolveStatus simple_dual_fix(Problem *prob)
             continue;
         }
 
-        // a variable in P is fixed from the sign of its objective derivative
-        // over the bounds of the others; this also catches the empty columns
-        // that remove_empty_cols keeps (coupled in P)
+        /* if column appears in quadratic term */
         if (col_in_P(constraints->state, (int) k))
         {
             P_dual_fix(prob, (int) k);
