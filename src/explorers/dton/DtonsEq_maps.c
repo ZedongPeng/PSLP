@@ -49,9 +49,8 @@ int dton_choose_subst(const double *row_vals, int col_size0, int col_size1)
 /* Which entry (0 or 1) of a doubleton equality row to substitute, or -1 when
    the row cannot be eliminated. A column absent from P is always preferred. A
    column in P is substituted only when the other column is in P too and its
-   row of P is a positive diagonal alone (sub0/sub1, diagonal_only_P_entry),
-   so it folds into the other column's diagonal without fill-in. The caller
-   checks that the other column has a diagonal. */
+   row of P is a positive diagonal alone that folds into the other column's
+   diagonal without fill-in (sub0/sub1). */
 int dton_choose_subst_qp(const double *row_vals, int col_size0, int col_size1,
                          bool in_P0, bool in_P1, bool sub0, bool sub1)
 {
@@ -149,20 +148,19 @@ bool dton_claim(Problem *prob, DtonWorkspace *dton_work, int *deferred,
         double Pkk[2] = {0.0, 0.0};
         if (in_P0 && in_P1)
         {
-            /* a column in P folds into the other one without fill-in when its
-               row of P is a positive diagonal alone */
-            sub0 = diagonal_only_P_entry(P, P_row_sizes, col0, Pkk);
-            sub1 = diagonal_only_P_entry(P, P_row_sizes, col1, Pkk + 1);
+            /* a P column folds into the other column's diagonal, which every
+               column of a convex P has; the input check only enforces symmetry */
+            sub0 = diagonal_only_P_entry(P, P_row_sizes, col0, Pkk) &&
+                   P_row_has_diagonal(P, P_row_sizes, col1);
+            sub1 = diagonal_only_P_entry(P, P_row_sizes, col1, Pkk + 1) &&
+                   P_row_has_diagonal(P, P_row_sizes, col0);
         }
         subst = dton_choose_subst_qp(vals, col_sizes[col0], col_sizes[col1], in_P0,
                                      in_P1, sub0, sub1);
 
         /* the row cannot be eliminated, or the col this row wants to
-           substitute is already claimed by another row. A P column can only be
-           substituted into a column with a diagonal; every column of a convex
-           P has one, but the input check only enforces symmetry. */
-        if (subst < 0 || dton_work->substs.col_subst[cols[subst]] >= 0 ||
-            (in_P0 && in_P1 && !P_row_has_diagonal(P, P_row_sizes, cols[1 - subst])))
+           substitute is already claimed by another row */
+        if (subst < 0 || dton_work->substs.col_subst[cols[subst]] >= 0)
         {
             deferred[(*n_deferred)++] = i;
             continue;
