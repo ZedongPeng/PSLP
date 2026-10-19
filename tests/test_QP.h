@@ -29,7 +29,7 @@
    P and only when its row of P holds nothing but a positive diagonal and the
    other variable of the row (no fill-in in P); otherwise the other column is
    substituted or the row stays.
-   Test 1: structural validation of P in new_presolver_from_problem
+   Test 1: P is rejected when asymmetric or when an array is missing
    Test 2: fix_col folds the coupling terms of P into c and removes the
            row/column of P
    Test 3: singleton equality row fixing a variable that appears in P
@@ -100,7 +100,8 @@ static Presolver *qp_presolver(const double *Ax, const int *Ai, const int *Ap,
     return new_presolver_from_problem(&problem, stgs);
 }
 
-/*  Input validation. The constraint part is x0 + x1 <= 1, -1 <= x <= 1. */
+/*  Input validation of P: asymmetric values, a missing triangle or a missing
+    array are rejected. The constraint part is x0 + x1 <= 1, -1 <= x <= 1. */
 static char *test_1_qp()
 {
     double Ax[] = {1, 1};
@@ -133,54 +134,6 @@ static char *test_1_qp()
         presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
                                  Pp, 3, stgs);
         mu_assert("upper triangular P should be rejected", presolver == NULL);
-    }
-
-    // unsorted row
-    {
-        double Px[] = {1, 2, 1, 2};
-        int Pi[] = {1, 0, 0, 1};
-        int Pp[] = {0, 2, 4};
-        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
-                                 Pp, 4, stgs);
-        mu_assert("unsorted P row should be rejected", presolver == NULL);
-    }
-
-    // duplicate column index in a row
-    {
-        double Px[] = {1, 1, 1};
-        int Pi[] = {0, 0, 1};
-        int Pp[] = {0, 2, 3};
-        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
-                                 Pp, 3, stgs);
-        mu_assert("duplicate P entry should be rejected", presolver == NULL);
-    }
-
-    // column index out of range
-    {
-        double Px[] = {1, 1};
-        int Pi[] = {0, 2};
-        int Pp[] = {0, 1, 2};
-        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
-                                 Pp, 2, stgs);
-        mu_assert("out of range P column should be rejected", presolver == NULL);
-    }
-
-    // row pointers: Pp[0] != 0, non-decreasing, Pp[n] == Pnnz
-    {
-        double Px[] = {1, 1, 1};
-        int Pi[] = {0, 1, 1};
-        int Pp_first[] = {1, 2, 3};
-        int Pp_decreasing[] = {0, 2, 1};
-        int Pp_last[] = {0, 1, 2};
-        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
-                                 Pp_first, 3, stgs);
-        mu_assert("Pp[0] != 0 should be rejected", presolver == NULL);
-        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
-                                 Pp_decreasing, 1, stgs);
-        mu_assert("decreasing Pp should be rejected", presolver == NULL);
-        presolver = qp_presolver(Ax, Ai, Ap, 1, 2, 2, lhs, rhs, lbs, ubs, c, Px, Pi,
-                                 Pp_last, 3, stgs);
-        mu_assert("Pp[n] != Pnnz should be rejected", presolver == NULL);
     }
 
     // a non-empty P needs all three arrays

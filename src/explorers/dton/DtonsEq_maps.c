@@ -50,7 +50,8 @@ int dton_choose_subst(const double *row_vals, int col_size0, int col_size1)
    the row cannot be eliminated. A column absent from P is always preferred. A
    column in P is substituted only when the other column is in P too and its
    row of P is a positive diagonal alone (sub0/sub1, diagonal_only_P_entry),
-   so it folds into the other column's diagonal without fill-in. */
+   so it folds into the other column's diagonal without fill-in. The caller
+   checks that the other column has a diagonal. */
 int dton_choose_subst_qp(const double *row_vals, int col_size0, int col_size1,
                          bool in_P0, bool in_P1, bool sub0, bool sub1)
 {

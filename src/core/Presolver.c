@@ -273,8 +273,7 @@ Presolver *new_presolver_from_problem(const ProblemData *problem,
         return NULL;
     }
 
-    if (Pnnz > 0 && (Px == NULL || Pi == NULL || Pp == NULL ||
-                     !matrix_valid_csr_input(Pi, Pp, n, n, Pnnz)))
+    if (Pnnz > 0 && (Px == NULL || Pi == NULL || Pp == NULL))
     {
         return NULL;
     }

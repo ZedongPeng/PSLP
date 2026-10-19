@@ -145,8 +145,10 @@ extern "C"
        'nnz' and 'Pnnz' can be at most INT_MAX. The 'obj_offset' of 'problem'
        is carried over to the reduced problem.
 
-       The function returns NULL if the allocation fails, nnz or Pnnz is too large,
-       or if the input data is invalid. */
+       The CSR structure of A and P is assumed to be valid (sorted column
+       indices, no duplicates, consistent row pointers). The function returns
+       NULL if the allocation fails, nnz or Pnnz is too large, an array of P is
+       missing although Pnnz > 0, or P is not exactly symmetric. */
     Presolver *new_presolver_from_problem(const ProblemData *problem,
                                           const Settings *stgs);
 

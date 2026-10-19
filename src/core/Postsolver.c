@@ -110,8 +110,7 @@ static inline void copy_reduced_sol_to_orginal(Solution *sol, const double *x,
     }
 }
 
-// fixes xk and recovers zk = ck + sum_l Pkl xl - ak^T y. Every column in the
-// saved P row was active when xk was fixed, so it has been recovered by now.
+// fixes xk and recovers zk = ck + sum_l Pkl xl - ak^T y.
 static void retrieve_fix_col(Solution *sol, const FixedColRecord *r)
 {
     int col = r->col;
