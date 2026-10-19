@@ -188,7 +188,7 @@ static inline void P_dual_fix(Problem *prob, int col)
 
 PresolveStatus simple_dual_fix(Problem *prob)
 {
-    assert(!has_removable_empty_cols(prob->constraints->state));
+    assert(empty_cols_drained(prob));
     DEBUG(verify_problem_up_to_date(prob->constraints));
 
     Constraints *constraints = prob->constraints;

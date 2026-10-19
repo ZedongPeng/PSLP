@@ -130,6 +130,12 @@ void verify_row_tags(const struct Constraints *constraints);
    inactive columns when finished */
 void verify_empty_when_finished(const struct Constraints *constraints);
 
+/* True when the empty-column worklist holds only columns that
+   remove_empty_cols keeps: a column in P whose row is not a positive diagonal
+   alone, or a lone diagonal whose unconstrained minimiser -ck / Pkk is huge.
+   The explorers assert this on entry. */
+bool empty_cols_drained(const struct Problem *prob);
+
 void run_debugger_stats_consistency_check(const struct PresolveStats *stats);
 
 void print_matrix(const struct Matrix *A);

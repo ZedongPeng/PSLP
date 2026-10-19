@@ -65,6 +65,10 @@ void run_debugger_problem(const Problem *prob, bool finished)
 {
     run_debugger(prob->constraints, finished);
     verify_P(prob, finished);
+    if (finished)
+    {
+        PSLP_ASSERT(empty_cols_drained(prob));
+    }
 }
 
 int ASSERT_NO_ZEROS_D(const double *x, size_t len)
@@ -564,10 +568,37 @@ void verify_locks(const Matrix *AT, const Lock *locks, const ColTag *col_tags,
     }
 }
 
+bool empty_cols_drained(const Problem *prob)
+{
+    const State *state = prob->constraints->state;
+    const ColTag *col_tags = prob->constraints->col_tags;
+    const iVec *empty_cols = state->empty_cols;
+
+    for (size_t i = 0; i < empty_cols->len; ++i)
+    {
+        int k = empty_cols->data[i];
+        if (HAS_TAG(col_tags[k], C_TAG_INACTIVE))
+        {
+            continue;
+        }
+        if (!col_in_P(state, k))
+        {
+            return false;
+        }
+        double Pkk;
+        if (diagonal_only_P_entry(prob->obj->P, state->P_row_sizes, k, &Pkk) &&
+            !IS_HUGE(-prob->obj->c[k] / Pkk))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void verify_empty_when_finished(const Constraints *constraints)
 {
-    // columns that are empty in A but appear in P stay in the problem
-    PSLP_ASSERT(!has_removable_empty_cols(constraints->state));
+    // empty columns kept for P are checked by run_debugger_problem
     PSLP_ASSERT(constraints->state->empty_rows->len == 0);
     PSLP_ASSERT(constraints->state->rows_to_delete->len == 0);
     PSLP_ASSERT(constraints->state->fixed_cols_to_delete->len == 0);

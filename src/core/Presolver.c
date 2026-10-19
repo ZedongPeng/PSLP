@@ -584,7 +584,7 @@ static inline PresolveStatus run_trivial_explorers(Problem *prob,
 
     assert(prob->constraints->state->ston_rows->len == 0);
     assert(prob->constraints->state->empty_rows->len == 0);
-    assert(!has_removable_empty_cols(prob->constraints->state));
+    assert(empty_cols_drained(prob));
     return UNCHANGED;
 }
 
@@ -597,7 +597,7 @@ static inline PresolveStatus run_fast_explorers(Problem *prob, const Settings *s
 {
     assert(prob->constraints->state->ston_rows->len == 0);
     assert(prob->constraints->state->empty_rows->len == 0);
-    assert(!has_removable_empty_cols(prob->constraints->state));
+    assert(empty_cols_drained(prob));
     PresolveStatus status = UNCHANGED;
     Timer timer;
 
@@ -636,7 +636,7 @@ run_medium_explorers(Problem *prob, const Settings *stgs, PresolveStats *stats)
 {
     assert(prob->constraints->state->ston_rows->len == 0);
     assert(prob->constraints->state->empty_rows->len == 0);
-    assert(!has_removable_empty_cols(prob->constraints->state));
+    assert(empty_cols_drained(prob));
     DEBUG(verify_no_duplicates_sort(prob->constraints->state->updated_activities));
     size_t nnz_before;
     size_t *nnz = &prob->constraints->A->nnz;
@@ -690,7 +690,7 @@ run_medium_explorers(Problem *prob, const Settings *stgs, PresolveStats *stats)
         clock_gettime(CLOCK_MONOTONIC, &timer.end);
         stats->time_parallel_cols += GET_ELAPSED_SECONDS(timer);
         assert(prob->constraints->state->empty_rows->len == 0);
-        assert(!has_removable_empty_cols(prob->constraints->state));
+        assert(empty_cols_drained(prob));
         status |= run_trivial_explorers(prob, stgs);
         assert(prob->constraints->state->ston_rows->len == 0);
         assert(!(status & REDUCED));

@@ -415,7 +415,7 @@ static char *test_4_qp()
     State *state = presolver->prob->constraints->state;
     mu_assert("kept empty col", state->empty_cols->len == 1 &&
                                     state->empty_cols->data[0] == 2 &&
-                                    !has_removable_empty_cols(state));
+                                    col_in_P(state, 2));
 
     double x[] = {32.0 / 19, 12.0 / 19, -16.0 / 19};
     double y[] = {24.0 / 19};

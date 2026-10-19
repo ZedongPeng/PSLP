@@ -325,7 +325,7 @@ PresolveStatus remove_parallel_cols(Problem *prob)
 {
     assert(prob->constraints->state->ston_rows->len == 0);
     assert(prob->constraints->state->empty_rows->len == 0);
-    assert(!has_removable_empty_cols(prob->constraints->state));
+    assert(empty_cols_drained(prob));
     DEBUG(verify_problem_up_to_date(prob->constraints));
 
     Constraints *constraints = prob->constraints;

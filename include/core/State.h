@@ -68,22 +68,6 @@ static inline bool col_in_P(const State *data, int k)
     return data->P_row_sizes != NULL && data->P_row_sizes[k] != 0;
 }
 
-/* True if empty_cols holds a column with an empty P row, which
-   remove_empty_cols always removes. Columns with entries in P stay in the
-   worklist; a diagonal-only one is also removable but not detected here. */
-static inline bool has_removable_empty_cols(const State *data)
-{
-    for (size_t i = 0; i < data->empty_cols->len; ++i)
-    {
-        if (!col_in_P(data, data->empty_cols->data[i]))
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 /* Maintains consistency of all internal data structures when columns and
    removes are deleted */
 void clean_state(State *data, const struct Mapping *maps, size_t n_rows,

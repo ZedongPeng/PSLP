@@ -100,7 +100,7 @@ PresolveStatus remove_dton_eq_rows(Problem *prob)
 
     assert(state->ston_rows->len == 0);
     assert(state->empty_rows->len == 0);
-    assert(!has_removable_empty_cols(state));
+    assert(empty_cols_drained(prob));
     DEBUG(verify_problem_up_to_date(constraints));
 
     while (dton_rows->len > 0)
