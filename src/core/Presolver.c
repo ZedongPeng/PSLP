@@ -266,14 +266,9 @@ Presolver *new_presolver_from_problem(const ProblemData *problem,
     const int *Pp = problem->Pp;
     size_t Pnnz = problem->Pnnz;
 
-    /* the row pointers of the internal matrices are ints, so a valid CSR
-       input has at most INT_MAX non-zeros */
-    if (nnz > (size_t) INT_MAX || Pnnz > (size_t) INT_MAX)
-    {
-        return NULL;
-    }
-
-    if (Pnnz > 0 && (Px == NULL || Pi == NULL || Pp == NULL))
+    /* very basic validation */
+    if (nnz > (size_t) INT_MAX || Pnnz > (size_t) INT_MAX ||
+        (Pnnz > 0 && (Px == NULL || Pi == NULL || Pp == NULL)))
     {
         return NULL;
     }
@@ -332,7 +327,7 @@ Presolver *new_presolver_from_problem(const ProblemData *problem,
     memcpy(c_copy, c, n_cols * sizeof(double));
 
     // ---------------------------------------------------------------------------
-    //  Build and validate P (NULL for an LP)
+    //           Build and validate P (NULL for an LP)
     // ---------------------------------------------------------------------------
     if (Pnnz > 0)
     {
@@ -352,8 +347,7 @@ Presolver *new_presolver_from_problem(const ProblemData *problem,
         if (!P_row_sizes) goto cleanup;
         count_rows(P, P_row_sizes);
     }
-    size_t Pnnz_stripped =
-        P ? P->nnz : 0; /* after the explicit zeros were dropped */
+    size_t Pnnz_stripped = P ? P->nnz : 0;     /* after explicit zeros are dropped */
     bool lp_fold = stgs->lp_fold && P == NULL; /* no fold of a QP */
 
     // ---------------------------------------------------------------------------
@@ -388,6 +382,10 @@ Presolver *new_presolver_from_problem(const ProblemData *problem,
     activities = parallel_data.activities;
 
     nnz_stripped = A->nnz; /* after the explicit zeros were dropped */
+
+    // ---------------------------------------------------------------------------
+    //                   Fold the LP if folding is enabled
+    // ---------------------------------------------------------------------------
     if (lp_fold)
     {
         FoldOptions fold_options;

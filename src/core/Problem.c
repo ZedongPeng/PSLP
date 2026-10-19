@@ -90,8 +90,6 @@ static void objective_clean(Objective *obj, const int *P_row_sizes,
         return;
     }
 
-    /* drops the rows with size SIZE_INACTIVE_COL (== SIZE_INACTIVE_ROW) and
-       renumbers the columns */
     remove_extra_space(obj->P, P_row_sizes, col_map, n_cols_new);
 }
 
@@ -187,8 +185,6 @@ void problem_clean(Problem *prob)
     size_t n_cols_old = prob->constraints->n;
     size_t n_rows_old = prob->constraints->m;
     constraints_clean(prob->constraints, maps);
-
-    /* before clean_state, which shrinks P_row_sizes */
     objective_clean(prob->obj, prob->constraints->state->P_row_sizes, maps->cols,
                     n_cols_old, prob->constraints->n);
     clean_state(prob->constraints->state, maps, n_rows_old, n_cols_old);
