@@ -69,6 +69,8 @@
             only stays (no substitution with fill-in or into a coupled row)
    Test 29: lp_fold leaves a QP unfolded; P = 0 through new_presolver_from_problem
             folds as an LP
+   Test 31: huge minimiser of an empty diagonal-only column: left alone when
+            interior, fixed at the bound when outside the box
 */
 
 #define QP_TOL 1e-8
@@ -1569,6 +1571,51 @@ static char *test_30_qp()
     return 0;
 }
 
+/*  Huge minimiser of an empty diagonal-only column. P = diag(1e-12, 1e-12, 0, 0),
+    c = (1, 1, 1, 1), x2 + x3 >= 1 with 0 <= x2, x3 <= 1. x0 and x1 are empty
+    in A with minimiser -1e12. x0 has no lower bound, so the minimiser is
+    interior and huge: the column is left for the solver. x1 has lower bound 0:
+    the objective is increasing on the box and x1 is fixed at 0 whatever the
+    minimiser. */
+static char *test_31_qp()
+{
+    double Ax[] = {1, 1};
+    int Ai[] = {2, 3};
+    int Ap[] = {0, 2};
+    int n_rows = 1, n_cols = 4;
+    double lhs[] = {1};
+    double rhs[] = {INF};
+    double lbs[] = {-INF, 0, 0, 0};
+    double ubs[] = {INF, 5, 1, 1};
+    double c[] = {1, 1, 1, 1};
+    double Px[] = {1e-12, 1e-12};
+    int Pi[] = {0, 1};
+    int Pp[] = {0, 1, 2, 2, 2};
+
+    Settings *stgs = default_settings();
+    set_settings_false(stgs);
+    Presolver *presolver = qp_presolver(Ax, Ai, Ap, n_rows, n_cols, 2, lhs, rhs, lbs,
+                                        ubs, c, Px, Pi, Pp, 2, stgs);
+    mu_assert("init", presolver != NULL);
+    mu_assert("status", run_presolver(presolver) == REDUCED);
+
+    const ProblemData *red = presolver->reduced_prob;
+    mu_assert("x0 kept, x1 fixed", red->m == 1 && red->n == 3 && red->Pnnz == 1);
+    mu_assert("x0 still free", red->lbs[0] == -INF && red->ubs[0] == INF);
+    mu_assert("reduced c", red->c[0] == 1.0 && red->c[1] == 1.0 && red->c[2] == 1.0);
+
+    double x[] = {-1e12, 1, 0};
+    double y[] = {1};
+    double z[] = {0, 0, 0};
+    postsolve(presolver, x, y, z);
+    mu_assert("x1 at its lower bound",
+              presolver->sol->x[1] == 0.0 && presolver->sol->z[1] == 1.0);
+
+    PS_FREE(stgs);
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_qp()
 {
     mu_run_test(test_1_qp, counter_qp);
@@ -1595,6 +1642,7 @@ static const char *all_tests_qp()
     mu_run_test(test_25_qp, counter_qp);
     mu_run_test(test_29_qp, counter_qp);
     mu_run_test(test_30_qp, counter_qp);
+    mu_run_test(test_31_qp, counter_qp);
     return 0;
 }
 

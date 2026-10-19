@@ -522,8 +522,8 @@ PresolveStatus remove_empty_rows(const Constraints *constraints)
 /* Fixes an empty column k that appears in P. With only a positive diagonal
    in P the objective in x_k is (1/2) P_kk x_k^2 + c_k x_k, so
    x_k = clip(-c_k / P_kk, lb, ub). Returns false, leaving the column for the
-   dual fix, when its row of P is not a diagonal alone or the unconstrained
-   minimiser is huge (as in P_dual_fix). */
+   dual fix, when its row of P is not a diagonal alone or the minimiser is
+   huge and inside the box (as in P_dual_fix). */
 static bool fix_empty_P_col(Problem *prob, int k)
 {
     const State *state = prob->constraints->state;
@@ -538,11 +538,11 @@ static bool fix_empty_P_col(Problem *prob, int k)
         return false;
     }
 
+    /* A minimiser outside the box means the objective is monotone on it, so
+       the bound is exact whatever the size of the minimiser. An interior
+       minimiser that is huge (a tiny diagonal against the cost) is left for
+       the solver, as in P_dual_fix. */
     double val = -c[k] / Pkk;
-    if (IS_HUGE(val))
-    {
-        return false;
-    }
     if (!HAS_TAG(col_tags[k], C_TAG_LB_INF) && val < bounds[k].lb)
     {
         val = bounds[k].lb;
@@ -550,6 +550,10 @@ static bool fix_empty_P_col(Problem *prob, int k)
     else if (!HAS_TAG(col_tags[k], C_TAG_UB_INF) && val > bounds[k].ub)
     {
         val = bounds[k].ub;
+    }
+    else if (IS_HUGE(val))
+    {
+        return false;
     }
 
     bounds[k].lb = val;

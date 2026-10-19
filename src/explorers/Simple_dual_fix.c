@@ -156,10 +156,6 @@ static inline void P_dual_fix(Problem *prob, int col)
     if (lock.down == 0 && lock.up == 0 && constraints->state->P_row_sizes[col] == 1)
     {
         double val = -prob->obj->c[col] / Pkk;
-        if (IS_HUGE(val))
-        {
-            return;
-        }
         if (!lb_inf && val < lb)
         {
             val = lb;
@@ -167,6 +163,11 @@ static inline void P_dual_fix(Problem *prob, int col)
         else if (!ub_inf && val > ub)
         {
             val = ub;
+        }
+        else if (IS_HUGE(val))
+        {
+            // a huge interior minimiser (tiny diagonal) is left for the solver
+            return;
         }
         fix_col(prob, col, val);
         return;
