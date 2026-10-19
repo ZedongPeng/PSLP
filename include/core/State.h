@@ -62,11 +62,7 @@ State *new_state(int *row_sizes, int *col_sizes, int *P_row_sizes,
                  const RowTag *row_tags);
 void free_state(State *data);
 
-/* True if column k has a non-empty row in P. Singleton and parallel columns
-   skip such a variable; the doubleton eliminator and the dual fix handle it
-   through the P-aware paths (see Problem.h). For an inactive column the row
-   size is SIZE_INACTIVE_COL and this returns true; callers test
-   C_TAG_INACTIVE first. Always false for an LP. */
+/* True if column k has a non-empty row in P. */
 static inline bool col_in_P(const State *data, int k)
 {
     return data->P_row_sizes != NULL && data->P_row_sizes[k] != 0;
