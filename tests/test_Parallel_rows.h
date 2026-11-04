@@ -1377,6 +1377,53 @@ static char *test_18_parallel_rows()
     return 0;
 }
 
+static char *test_19_parallel_rows()
+{
+    double s3 = sqrt(3.0);
+    double Ax[] = {s3, s3, 3, 3};
+    int Ai[] = {0, 1, 0, 1};
+    int Ap[] = {0, 2, 4};
+    int nnz = 4;
+    int n_rows = 2;
+    int n_cols = 2;
+
+    double lhs[] = {1.7 * s3, -INFINITY};
+    double rhs[] = {1.7 * s3, 3 * 1.7};
+    double lbs[] = {0, 0};
+    double ubs[] = {100, 100};
+    double c[] = {0, 0};
+
+    mu_assert("rounding, equality first", rhs[0] > rhs[1] * (Ax[0] / Ax[2]));
+    mu_assert("rounding, inequality first", rhs[0] * (Ax[2] / Ax[0]) > rhs[1]);
+
+    Settings *stgs = default_settings();
+    stgs->lp_fold = false;
+    Presolver *presolver =
+        new_presolver(Ax, Ai, Ap, n_rows, n_cols, nnz, lhs, rhs, lbs, ubs, c, stgs);
+
+    Problem *prob = presolver->prob;
+    Constraints *constraints = prob->constraints;
+    Matrix *A = constraints->A;
+    PresolveStatus status = remove_parallel_rows(constraints);
+    mu_assert("feasible rows reported infeasible", status != INFEASIBLE);
+    problem_clean(prob);
+
+    int Ap_correct[] = {0, 2};
+    mu_assert("one row remains", A->m == 1 && check_row_starts(A, Ap_correct));
+    mu_assert("error Ax", ARRAYS_EQUAL_DOUBLE(Ax, A->x, 2));
+    mu_assert("error Ai", ARRAYS_EQUAL_INT(Ai, A->i, 2));
+    RowTag row_tags_correct[] = {R_TAG_EQ};
+    mu_assert("error row tags",
+              ARRAYS_EQUAL_ROWTAG(row_tags_correct, constraints->row_tags, 1));
+    mu_assert("error lhs", ARRAYS_EQUAL_DOUBLE(lhs, constraints->lhs, 1));
+    mu_assert("error rhs", ARRAYS_EQUAL_DOUBLE(rhs, constraints->rhs, 1));
+
+    PS_FREE(stgs);
+    DEBUG(run_debugger(constraints, false));
+    free_presolver(presolver);
+    return 0;
+}
+
 static const char *all_tests_parallel_rows()
 {
     mu_run_test(test_1_parallel_rows, counter_parallel_rows);
@@ -1397,6 +1444,7 @@ static const char *all_tests_parallel_rows()
     mu_run_test(test_16_parallel_rows, counter_parallel_rows);
     mu_run_test(test_17_parallel_rows, counter_parallel_rows);
     mu_run_test(test_18_parallel_rows, counter_parallel_rows);
+    mu_run_test(test_19_parallel_rows, counter_parallel_rows);
 
     return 0;
 }
